@@ -1,0 +1,59 @@
+[project]
+name = "fastapi-fullstack-starter"
+version = "0.1.0"
+description = "A production-ready FastAPI boilerplate with PostgreSQL, user authentication, and Docker support. Perfect starting point for building modern full-stack applications."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.0",
+    "alembic>=1.16.4",
+    "fastapi[standard]>=0.116.1",
+    "psycopg[binary]>=3.3.2",
+    "pwdlib[argon2]>=0.3.0",
+    "pydantic-settings>=2.10.1",
+    "pyjwt>=2.10.1",
+    "sqlalchemy[asyncio]>=2.0.41",
+]
+
+[dependency-groups]
+dev = [
+    "factory-boy>=3.3.3",
+    "freezegun>=1.5.5",
+    "ipykernel>=7.1.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.3",
+    "taskipy>=1.14.1",
+    "testcontainers>=4.13.3",
+]
+
+[tool.ruff]
+line-length = 79
+extend-exclude = ['migrations']
+
+[tool.ruff.lint]
+preview = true
+select = ['I', 'F', 'E', 'W', 'PL', 'PT', 'FAST']
+
+[tool.ruff.format]
+preview = true
+quote-style = 'single'
+
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = '-p no:warnings'
+asyncio_default_fixture_loop_scope = 'function' # pytest-asyncio
+
+[tool.taskipy.tasks]
+lint = 'ruff check'
+pre_format = 'ruff check --fix'
+format = 'ruff format'
+run = 'fastapi dev app/app.py'
+pre_test = 'task lint'
+test = 'pytest -s -x --cov=app -vv'
+post_test = 'coverage html'
+
+[tool.coverage.run]
+core = "ctrace"
+concurrency = ["thread", "greenlet"]
