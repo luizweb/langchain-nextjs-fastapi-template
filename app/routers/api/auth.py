@@ -15,7 +15,7 @@ from app.security import (
     verify_password,
 )
 
-router = APIRouter(prefix='/auth', tags=['auth'])
+router = APIRouter()
 
 OAuth2Form = Annotated[OAuth2PasswordRequestForm, Depends()]
 Session = Annotated[AsyncSession, Depends(get_session)]

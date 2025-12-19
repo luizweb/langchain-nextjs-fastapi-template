@@ -1,0 +1,75 @@
+<div class="card">
+    <h1 class="card-title">Administração de Usuários</h1>
+    <p class="card-subtitle">
+        Lista de usuários cadastrados no sistema.
+    </p>
+
+    {% if users %}
+        <div class="mt-3" style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>E-mail</th>
+                        <th>Tipo</th>
+                        <th>Criado em</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username or '-' }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% if user.is_admin %}
+                                <span class="badge badge-admin">Admin</span>
+                            {% else %}
+                                <span class="badge badge-user">Usuário</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at else '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            {% if offset > 0 %}
+                <button
+                    hx-get="/web/users?offset={{ offset - limit }}&limit={{ limit }}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true">
+                    ← Anterior
+                </button>
+            {% else %}
+                <button disabled>← Anterior</button>
+            {% endif %}
+
+            <span>
+                Página {{ (offset // limit) + 1 }}
+            </span>
+
+            {% if users|length == limit %}
+                <button
+                    hx-get="/web/users?offset={{ offset + limit }}&limit={{ limit }}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true">
+                    Próxima →
+                </button>
+            {% else %}
+                <button disabled>Próxima →</button>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="mt-3 text-center text-muted">
+            Nenhum usuário encontrado.
+        </p>
+    {% endif %}
+</div>

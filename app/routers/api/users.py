@@ -20,7 +20,7 @@ from app.security import (
     get_password_hash,
 )
 
-router = APIRouter(prefix='/users', tags=['users'])
+router = APIRouter()
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -65,16 +65,8 @@ async def create_user(user: UserSchema, session: Session):
 @router.get('/', response_model=UserList)
 async def read_users(
     session: Session,
-    filter_users: Annotated[FilterPage, Query()],
-    current_user: CurrentUser,
+    filter_users: Annotated[FilterPage, Query()]
 ):
-    # Apenas administradores podem listar todos os usuários
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='Only administrators can list users'
-        )
-
     query = await session.scalars(
         select(User).offset(filter_users.offset).limit(filter_users.limit)
     )

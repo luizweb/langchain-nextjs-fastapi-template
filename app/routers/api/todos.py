@@ -22,7 +22,7 @@ router = APIRouter()
 Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
-router = APIRouter(prefix='/todos', tags=['todos'])
+router = APIRouter()
 
 
 @router.post('/', response_model=TodoPublic)

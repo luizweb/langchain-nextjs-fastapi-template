@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from jwt import DecodeError, ExpiredSignatureError, decode, encode
 from pwdlib import PasswordHash
@@ -76,5 +76,86 @@ async def get_current_user(
 
     if not user:
         raise credentials_exception
+
+    return user
+
+
+# Adicionar um dependency para pegar o usuário a partir do cookie (web)
+async def get_current_user_from_cookie(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="Could not validate credentials (no cookie token)",
+        )
+
+    try:
+        payload = decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        subject_email = payload.get('sub')
+
+        if not subject_email:
+            raise HTTPException(
+                status_code=HTTPStatus.UNAUTHORIZED,
+                detail="Could not validate credentials",
+            )
+
+    except DecodeError:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="Token expired",
+        )
+
+    user = await session.scalar(
+        select(User).where(User.email == subject_email)
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return user
+
+
+# Versão "optional" -> retorna None em vez de exception
+async def get_current_user_from_cookie_optional(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    token = request.cookies.get("access_token")
+
+    if not token:
+        return None
+
+    try:
+        payload = decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        subject_email = payload.get("sub")
+        if not subject_email:
+            return None
+    except (DecodeError, ExpiredSignatureError):
+        return None
+
+    user = await session.scalar(
+        select(User).where(User.email == subject_email)
+    )
 
     return user
