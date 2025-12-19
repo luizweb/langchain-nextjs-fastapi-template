@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>fastapi-fullstack-starter — Login</title>
+
+    <!-- HTMX -->
+    <script 
+        src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
+        integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
+        crossorigin="anonymous">
+    </script>
+
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background:#f5f5f5; }
+        h1 { color: #333; border-bottom: 1px solid #007bff; padding-bottom: 10px; }
+        form { background: #fff; padding: 16px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        label { display:block; margin-bottom:8px; }
+        input { width:100%; padding:8px; margin-top:4px; box-sizing: border-box; }
+        button { padding:8px 12px; margin-top:8px; }
+        #message { margin-top:12px; min-height:18px; }
+        #users-list { margin-top:18px; background:#fff; padding:12px; border-radius:6px; }
+    </style>
+</head>
+<body>
+    <h1>Login</h1>
+
+    <form id="login-form" hx-post="/auth/token" hx-swap="none">
+        <label>
+            Email
+            <input type="email" name="username" required autocomplete="username" />
+        </label>
+
+        <label>
+            Senha
+            <input type="password" name="password" required autocomplete="current-password" />
+        </label>
+
+        <button type="submit">Entrar</button>
+    </form>
+
+    <div id="message" aria-live="polite"></div>
+
+    <div style="margin-top:16px;">
+        <button id="logout-btn" style="display:none;" onclick="logout()">Logout</button>
+        <button id="load-users-btn" hx-get="/pages/" hx-target="#users-list" hx-swap="innerHTML">Carregar usuários (rota protegida)</button>
+    </div>
+
+    <div id="users-list"></div>
+
+    <script>
+    // Adiciona o header Authorization em todas as requests HTMX quando houver token
+    document.addEventListener('htmx:configRequest', function(evt) {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            evt.detail.headers['Authorization'] = 'Bearer ' + token;
+        }
+    });
+
+    // Handler global para pós-processamento das requisições HTMX
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        try {
+            const elt = evt.detail.elt; // elemento que originou a requisição
+            const xhr = evt.detail.xhr;
+            if (!xhr) return;
+
+            // Se foi o formulário de login que originou a requisição, processa o JSON de resposta
+            if (elt && elt.id === 'login-form') {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    // tenta parsear resposta JSON
+                    let data = null;
+                    try { data = JSON.parse(xhr.responseText); } catch(e) { /* não JSON */ }
+
+                    if (data && data.access_token) {
+                        localStorage.setItem('access_token', data.access_token);
+                        document.getElementById('message').innerText = 'Login efetuado com sucesso.';
+                        document.getElementById('logout-btn').style.display = 'inline-block';
+                    } else {
+                        // Caso o backend não tenha retornado JSON esperado
+                        document.getElementById('message').innerText = 'Resposta inesperada do servidor.';
+                    }
+                } else {
+                    // Handler de erro (status 401 etc.)
+                    let errMsg = 'Falha no login.';
+                    try {
+                        const json = JSON.parse(xhr.responseText);
+                        if (json.detail) errMsg = json.detail;
+                    } catch(e) {}
+                    document.getElementById('message').innerText = errMsg;
+                }
+            }
+        } catch (e) {
+            // evitar quebra em caso de erro inesperado
+            console.error('Erro no handler htmx:afterRequest', e);
+        }
+    });
+
+    // Atualiza a UI de acordo com o estado do token ao carregar a página
+    function updateUiOnAuth() {
+        const token = localStorage.getItem('access_token');
+        document.getElementById('logout-btn').style.display = token ? 'inline-block' : 'none';
+        const msg = token ? 'Já logado.' : '';
+        if (msg) document.getElementById('message').innerText = msg;
+    }
+    updateUiOnAuth();
+
+    function logout() {
+        localStorage.removeItem('access_token');
+        document.getElementById('message').innerText = 'Desconectado.';
+        document.getElementById('logout-btn').style.display = 'none';
+        // opcional: limpar conteúdo protegido
+        document.getElementById('users-list').innerHTML = '';
+    }
+    </script>
+</body>
+</html>

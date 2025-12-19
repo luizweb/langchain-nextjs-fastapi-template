@@ -52,7 +52,8 @@ async def create_user(user: UserSchema, session: Session):
         username=user.username,
         # password=user.password,  # código antigo, sem hash
         password=hashed_password,  # armazenando a senha com hash
-        email=user.email
+        email=user.email,
+        is_admin=user.is_admin
     )
     session.add(db_user)
     await session.commit()
@@ -64,8 +65,16 @@ async def create_user(user: UserSchema, session: Session):
 @router.get('/', response_model=UserList)
 async def read_users(
     session: Session,
-    filter_users: Annotated[FilterPage, Query()]
+    filter_users: Annotated[FilterPage, Query()],
+    current_user: CurrentUser,
 ):
+    # Apenas administradores podem listar todos os usuários
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Only administrators can list users'
+        )
+
     query = await session.scalars(
         select(User).offset(filter_users.offset).limit(filter_users.limit)
     )

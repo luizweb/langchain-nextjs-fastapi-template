@@ -11,12 +11,14 @@ class UserSchema(BaseModel):
     username: str
     email: EmailStr
     password: str
+    is_admin: bool = False
 
 
 class UserPublic(BaseModel):
     id: int
     username: str
     email: EmailStr
+    is_admin: bool
     # Permite que o schema aceite objetos do SQLAlchemy (ORM)
     model_config = ConfigDict(from_attributes=True)
 

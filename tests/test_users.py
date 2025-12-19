@@ -21,7 +21,7 @@ def test_create_user(client):
 
 
 def test_read_users(client):
-    response = client.get('/users')
+    response = client.get('/users/')
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'users': []}
 
@@ -53,7 +53,7 @@ def test_update_user(client, user, token):
 def test_update_integrity_error(client, user, token):
     # Inserindo fausto
     client.post(
-        '/users',
+        '/users/',
         json={
             'username': 'fausto',
             'email': 'fausto@example.com',
