@@ -9,10 +9,10 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from app.app import app
 from app.database import (
     get_session,
 )
+from app.main import app
 from app.models import (
     User,
     table_registry,
@@ -110,7 +110,7 @@ async def other_user(session):
 @pytest.fixture
 def token(client, user):
     response = client.post(
-        '/auth/token',
+        '/api/auth/token/',
         data={'username': user.email, 'password': user.clean_password},
     )
     return response.json()['access_token']

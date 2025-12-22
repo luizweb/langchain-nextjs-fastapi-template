@@ -1,0 +1,48 @@
+<div id="user-profile" class="card" style="max-width: 520px; margin: 0 auto;">
+    <h2 class="card-title">Perfil</h2>
+    <p class="card-subtitle">Informações da sua conta.</p>
+
+    <div class="form-field">
+        <label class="form-label">Username</label>
+        <div class="form-input" style="background:transparent;border:none;padding:0;">
+            {{ user.username }}
+        </div>
+    </div>
+
+    <div class="form-field">
+        <label class="form-label">E-mail</label>
+        <div class="form-input" style="background:transparent;border:none;padding:0;">
+            {{ user.email }}
+        </div>
+    </div>
+
+    <div class="form-field">
+        <label class="form-label">Senha</label>
+        <div class="form-input" style="background:transparent;border:none;padding:0;">
+            •••••••••
+        </div>
+    </div>
+
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
+        <button
+            type="button"
+            class="btn"
+            hx-get="/web/users/profile/edit"
+            hx-target="#main-content"
+            hx-swap="innerHTML"
+            hx-push-url="true">
+            Atualizar
+        </button>
+
+        <button
+            type="button"
+            class="btn btn-outline"
+            hx-get="/web/"
+            hx-target="#main-content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            style="margin-left:auto;">
+            Cancelar
+        </button>
+    </div>
+</div>

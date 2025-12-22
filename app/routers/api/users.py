@@ -20,7 +20,7 @@ from app.security import (
     get_password_hash,
 )
 
-router = APIRouter(prefix='/users', tags=['users'])
+router = APIRouter()
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -52,7 +52,8 @@ async def create_user(user: UserSchema, session: Session):
         username=user.username,
         # password=user.password,  # código antigo, sem hash
         password=hashed_password,  # armazenando a senha com hash
-        email=user.email
+        email=user.email,
+        is_admin=user.is_admin
     )
     session.add(db_user)
     await session.commit()

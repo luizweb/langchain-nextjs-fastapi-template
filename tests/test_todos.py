@@ -18,7 +18,7 @@ class TodoFactory(factory.Factory):
 
 def test_create_todo(client, token):
     response = client.post(
-        '/todos/',
+        '/api/todos/',
         headers={'Authorization': f'Bearer {token}'},
         json={
             'title': 'Test todo',
@@ -41,7 +41,7 @@ async def test_list_todos_should_return_5_todos(session, client, user, token):
     await session.commit()
 
     response = client.get(
-        '/todos/',
+        '/api/todos/',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -57,7 +57,7 @@ async def test_list_todos_pagination_should_return_2_todos(
     await session.commit()
 
     response = client.get(
-        '/todos/?offset=1&limit=2',
+        '/api/todos/?offset=1&limit=2',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -75,7 +75,7 @@ async def test_list_todos_filter_title_should_return_5_todos(
     await session.commit()
 
     response = client.get(
-        '/todos/?title=Test todo 1',
+        '/api/todos/?title=Test todo 1',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -93,7 +93,7 @@ async def test_list_todos_filter_description_should_return_5_todos(
     await session.commit()
 
     response = client.get(
-        '/todos/?description=desc',
+        '/api/todos/?description=desc',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -111,7 +111,7 @@ async def test_list_todos_filter_state_should_return_5_todos(
     await session.commit()
 
     response = client.get(
-        '/todos/?state=draft',
+        '/api/todos/?state=draft',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -145,7 +145,7 @@ async def test_list_todos_filter_combined_should_return_5_todos(
     await session.commit()
 
     response = client.get(
-        '/todos/?title=Test todo combined&description=combined&state=done',
+        '/api/todos/?title=Test todo combined&description=combined&state=done',
         headers={'Authorization': f'Bearer {token}'},
     )
 
@@ -154,7 +154,7 @@ async def test_list_todos_filter_combined_should_return_5_todos(
 
 def test_patch_todo_error(client, token):
     response = client.patch(
-        '/todos/10',
+        '/api/todos/10',
         json={},
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -170,7 +170,7 @@ async def test_patch_todo(session, client, user, token):
     await session.commit()
 
     response = client.patch(
-        f'/todos/{todo.id}',
+        f'/api/todos/{todo.id}',
         json={'title': 'teste!'},
         headers={'Authorization': f'Bearer {token}'},
     )
@@ -186,7 +186,7 @@ async def test_delete_todo(session, client, user, token):
     await session.commit()
 
     response = client.delete(
-        f'/todos/{todo.id}', headers={'Authorization': f'Bearer {token}'}
+        f'/api/todos/{todo.id}', headers={'Authorization': f'Bearer {token}'}
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -197,7 +197,7 @@ async def test_delete_todo(session, client, user, token):
 
 def test_delete_todo_error(client, token):
     response = client.delete(
-        f'/todos/{10}', headers={'Authorization': f'Bearer {token}'}
+        f'/api/todos/{10}', headers={'Authorization': f'Bearer {token}'}
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND

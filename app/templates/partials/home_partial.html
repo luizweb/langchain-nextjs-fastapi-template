@@ -1,0 +1,29 @@
+<div class="card">
+    <h1 class="card-title">Bem-vindo ao Meu Projeto</h1>
+    <p class="card-subtitle">
+        Esta é a página inicial. Use o menu acima para navegar.
+    </p>
+
+    {% if current_user %}
+        <p class="mt-2">
+            Você está autenticado como
+            <strong>{{ current_user.name or current_user.email }}</strong>.
+        </p>
+
+        {% if current_user.is_admin %}
+            <p class="mt-2 text-muted">
+                Você é administrador. Use o botão <strong>Admin</strong> no topo
+                para gerenciar usuários.
+            </p>
+        {% else %}
+            <p class="mt-2 text-muted">
+                Seu perfil é de usuário padrão.
+            </p>
+        {% endif %}
+    {% else %}
+        <p class="mt-2">
+            Para acessar áreas restritas, clique em <strong>Entrar</strong>
+            no topo da página.
+        </p>
+    {% endif %}
+</div>

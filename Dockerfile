@@ -24,4 +24,4 @@ COPY . .
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
-CMD ["uv", "run", "uvicorn", "--host", "0.0.0.0", "app.app:app"]
+CMD ["uv", "run", "uvicorn", "--host", "0.0.0.0", "app.main:app"]
