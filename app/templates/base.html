@@ -247,8 +247,39 @@
             border: 1px solid #fecaca;
         }
 
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
         .text-center { text-align: center; }
         .text-muted { color: var(--text-muted); }
+
+        .btn-icon {
+            padding: 0.4rem;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-main);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.05s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+        }
+
+        .btn-icon:hover {
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+
+        .btn-icon:active {
+            transform: translateY(1px);
+        }
     </style>
 
     {% block extra_head %}{% endblock %}
@@ -267,6 +298,19 @@
 
             {% if current_user %}
                 <span style="margin-left:auto;">Olá, {{ current_user.name or current_user.email }}</span>
+
+                <button
+                    hx-get="/web/users/profile"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    hx-push-url="true"
+                    class="btn-icon"
+                    title="Perfil">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3z"/>
+                        <path fill-rule="evenodd" d="M8 8a3 3 0 100-6 3 3 0 000 6z"/>
+                    </svg>
+                </button>
 
                 <button
                     hx-post="/web/auth/logout"

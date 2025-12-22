@@ -14,11 +14,13 @@
                         <th>E-mail</th>
                         <th>Tipo</th>
                         <th>Criado em</th>
+                        <th>Atualizado em</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
-                    <tr>
+                    <tr id="user-{{ user.id }}">
                         <td>{{ user.id }}</td>
                         <td>{{ user.username or '-' }}</td>
                         <td>{{ user.email }}</td>
@@ -31,6 +33,26 @@
                         </td>
                         <td>
                             {{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at else '-' }}
+                        </td>
+                        <td>
+                            {{ user.updated_at.strftime('%d/%m/%Y %H:%M') if user.updated_at else '-' }}
+                        </td>
+                        <td>
+                            <button
+                                class="btn btn-icon btn-danger"
+                                title="Deletar usuário"
+                                hx-delete="/web/users/{{ user.id }}"
+                                hx-confirm="Tem certeza que deseja deletar este usuário?"
+                                hx-target="#user-{{ user.id }}"
+                                hx-swap="delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                  <polyline points="3 6 5 6 21 6"></polyline>
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                  <path d="M10 11v6"></path>
+                                  <path d="M14 11v6"></path>
+                                  <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
                         </td>
                     </tr>
                     {% endfor %}

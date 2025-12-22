@@ -1,6 +1,6 @@
-<div id="login-container" class="card" style="max-width: 420px; margin: 0 auto;">
-    <h2 class="card-title">Entrar</h2>
-    <p class="card-subtitle">Acesse sua conta para continuar.</p>
+<div id="user-profile-edit" class="card" style="max-width: 520px; margin: 0 auto;">
+    <h2 class="card-title">Editar Perfil</h2>
+    <p class="card-subtitle">Atualize suas informações.</p>
 
     {% if error %}
         <div class="alert alert-error">
@@ -8,10 +8,27 @@
         </div>
     {% endif %}
 
+    {% if success %}
+        <div class="alert alert-success">
+            {{ success }}
+        </div>
+    {% endif %}
+
     <form
-        hx-post="/web/auth/login"
-        hx-target="#login-container"
+        hx-put="/web/users/profile"
+        hx-target="#user-profile-edit"
         hx-swap="outerHTML">
+
+        <div class="form-field">
+            <label for="username" class="form-label">Username</label>
+            <input
+                type="text"
+                id="username"
+                name="username"
+                value="{{ user.username }}"
+                required
+                class="form-input">
+        </div>
 
         <div class="form-field">
             <label for="email" class="form-label">E-mail</label>
@@ -19,47 +36,35 @@
                 type="email"
                 id="email"
                 name="email"
-                value="{{ email or '' }}"
+                value="{{ user.email }}"
                 required
                 class="form-input">
         </div>
 
         <div class="form-field">
-            <label for="password" class="form-label">Senha</label>
+            <label for="password" class="form-label">Nova Senha (deixe em branco para manter a atual)</label>
             <input
                 type="password"
                 id="password"
                 name="password"
-                required
                 class="form-input">
         </div>
 
         <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
             <button type="submit" class="btn">
-                Entrar
+                Salvar
             </button>
+
             <button
                 type="button"
                 class="btn btn-outline"
-                hx-get="/web/"
+                hx-get="/web/users/profile"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 hx-push-url="true"
                 style="margin-left:auto;">
-                Voltar
+                Cancelar
             </button>
         </div>
     </form>
-
-    <p class="mt-3 text-muted" style="font-size:0.85rem;">
-        Não tem conta?
-        <a href="#"
-           hx-get="/web/users/register"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           hx-push-url="true"
-           style="color: var(--primary); text-decoration: none;">
-            Crie uma conta
-        </a>
-    </p>
 </div>
