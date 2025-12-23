@@ -1,0 +1,24 @@
+services:
+  langchain-nextjs-fastapi_database:
+    image: pgvector/pgvector:pg16
+    container_name: langchain-nextjs-fastapi_database
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+
+  langchain-nextjs-fastapi_app:
+    image: langchain-nextjs-fastapi_app
+    container_name: langchain-nextjs-fastapi_app
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - langchain-nextjs-fastapi_database
+    env_file:
+      - .env
+
+volumes:
+  pgdata:
