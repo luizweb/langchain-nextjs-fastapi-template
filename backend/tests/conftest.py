@@ -11,7 +11,7 @@ from testcontainers.postgres import PostgresContainer
 
 from app.database import get_session
 from app.main import app
-from app.models import User, table_registry
+from app.models import Project, User, table_registry
 from app.security import get_password_hash
 
 
@@ -22,6 +22,15 @@ class UserFactory(factory.Factory):
     username = factory.Sequence(lambda n: f'test{n}')
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
     password = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
+
+
+class ProjectFactory(factory.Factory):
+    class Meta:
+        model = Project
+
+    title = factory.Sequence(lambda n: f'Projeto {n}')
+    description = factory.Faker('sentence')
+    llm_prompt = factory.Faker('text', max_nb_chars=200)
 
 
 @pytest.fixture
@@ -105,6 +114,24 @@ async def other_user(session):
     user.clean_password = password
 
     return user
+
+
+@pytest_asyncio.fixture
+async def project(user, session):
+    project = ProjectFactory(user_id=user.id)
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return project
+
+
+@pytest_asyncio.fixture
+async def other_project(other_user, session):
+    project = ProjectFactory(user_id=other_user.id)
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return project
 
 
 @pytest.fixture

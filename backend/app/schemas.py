@@ -33,3 +33,22 @@ class Token(BaseModel):
 class FilterPage(BaseModel):
     offset: int = Field(0, ge=0)
     limit: int = Field(100, ge=1)
+
+
+class ProjectCreate(BaseModel):
+    title: str
+    description: str = ''
+    llm_prompt: str = ''
+
+
+class ProjectPublic(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    description: str
+    llm_prompt: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectList(BaseModel):
+    projects: list[ProjectPublic]

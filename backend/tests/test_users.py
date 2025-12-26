@@ -139,3 +139,14 @@ def test_delete_user_wrong_user(client, other_user, token):
     )
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json() == {'detail': 'Not enough permissions'}
+
+
+def test_get_me(client, user, token):
+    """Test GET /users/me endpoint returns current user information"""
+    response = client.get(
+        '/users/me',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response.status_code == HTTPStatus.OK
+    user_schema = UserPublic.model_validate(user).model_dump()
+    assert response.json() == user_schema
