@@ -12,3 +12,4 @@ wheels/
 .env
 database.db
 htmlcov/
+.DS_Store

@@ -73,6 +73,11 @@ async def read_users(
     return {'users': users}
 
 
+@router.get('/me', response_model=UserPublic)
+async def get_me(current_user: CurrentUser):
+    return current_user
+
+
 @router.put('/{user_id}', response_model=UserPublic)
 async def update_user(
     user_id: int,

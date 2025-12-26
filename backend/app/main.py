@@ -1,6 +1,7 @@
 from http import HTTPStatus
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import auth, users
 from app.schemas import Message
@@ -8,9 +9,17 @@ from app.schemas import Message
 app = FastAPI(
     title='langchain-nextjs-fastapi',
     version='0.0.1',
-    docs_url='/api/docs',
-    redoc_url='/api/redoc',
-    openapi_url='/api/openapi.json',
+    # docs_url='/api/docs',
+    # redoc_url='/api/redoc',
+    # openapi_url='/api/openapi.json',
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
