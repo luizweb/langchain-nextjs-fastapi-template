@@ -3,7 +3,7 @@ from http import HTTPStatus
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, projects, users
+from app.routers import auth, chat, projects, users
 from app.schemas import Message
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix='/auth', tags=['auth'])
 app.include_router(users.router, prefix='/users', tags=['users'])
 app.include_router(projects.router, prefix='/projects', tags=['projects'])
+app.include_router(chat.router, prefix='/chat', tags=['chat'])
 
 
 # Health Check

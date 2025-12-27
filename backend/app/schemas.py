@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -52,3 +54,18 @@ class ProjectPublic(BaseModel):
 
 class ProjectList(BaseModel):
     projects: list[ProjectPublic]
+
+
+class FileContentPublic(BaseModel):
+    """Schema para informações de um arquivo (agrupado por filename)."""
+    filename: str
+    chunks_count: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FilesList(BaseModel):
+    """Schema para listar todos os arquivos de um projeto."""
+    files: list[FileContentPublic]
+    total_files: int
+    total_chunks: int

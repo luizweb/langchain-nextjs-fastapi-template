@@ -9,11 +9,18 @@ dependencies = [
     "aiosqlite>=0.22.0",
     "alembic>=1.16.4",
     "fastapi[standard]>=0.116.1",
+    "langchain>=1.2.0",
+    "langchain-huggingface>=1.2.0",
+    "langchain-text-splitters>=1.1.0",
+    "langgraph>=1.0.5",
     "pgvector>=0.4.2",
     "psycopg[binary]>=3.3.2",
     "pwdlib[argon2]>=0.3.0",
     "pydantic-settings>=2.10.1",
     "pyjwt>=2.10.1",
+    "pymupdf-layout>=1.26.6",
+    "pymupdf4llm>=0.2.7",
+    "sentence-transformers>=5.2.0",
     "sqlalchemy[asyncio]>=2.0.41",
 ]
 
