@@ -1,22 +1,26 @@
+# import logging
+import json
 import tempfile
 from collections import defaultdict
 from typing import Annotated
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import insert, select
+from fastapi.responses import StreamingResponse  # texto incremental
+from langchain_core.messages import ToolMessage
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.rag import ProjectContext, agent
 from app.database import get_session
 from app.models import FileContent, Project, User
-from app.schemas import FileContentPublic, FilesList
+from app.schemas import ChatRequest, FileContentPublic, FilesList
 from app.security import get_current_user
-from app.utils import (
-    criar_documento_langchain,
-    dividir_documentos,
-    pdf_para_markdown,
-    preparar_chunks_para_banco,
-)
+from app.services import FileContentService, PDFProcessingService
+
+# Configure logging para debug
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,71 +42,68 @@ async def upload_pdf_to_project(
     current_user: CurrentUser,
     uploaded_file: UploadedPDF,
 ):
-    """Upload a PDF, process it with LangChain utils and store chunks in DB.
-
-    The PDF is *not* persisted on disk; it is read into memory, written to a
-    temporary file only for the duration of processing, and then discarded.
     """
-    # Validate content type (basic check)
+    Upload and process a PDF file.
+
+    The PDF is processed in memory and not stored permanently.
+    Chunks are extracted and stored in the database with embeddings.
+    """
+    # Validate PDF
     if uploaded_file.content_type not in {
         "application/pdf",
         "application/x-pdf"
     }:
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
-    # Ensure the project belongs to the current user
+    # Verify project ownership
     project = await session.scalar(
         select(Project).where(
             Project.id == project_id,
             Project.user_id == current_user.id,
         )
     )
-    if project is None:
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Read PDF contents into memory (no permanent storage)
+    # Read PDF into memory
     file_bytes = await uploaded_file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Use a temporary file only for the duration of pdf_para_markdown
+    # Process PDF using service
     try:
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(file_bytes)
             tmp.flush()
 
-            markdown = pdf_para_markdown(tmp.name)
-    except Exception as exc:  # pragma: no cover - depends on PDF internals
+            # Service handles all processing
+            processed_records = PDFProcessingService.process_pdf_file(
+                pdf_path=tmp.name,
+                filename=uploaded_file.filename,
+                project_id=project_id,
+            )
+
+    except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=f"Error processing PDF: {exc}"
         )
 
-    # Build LangChain document and split into chunks
-    document = criar_documento_langchain(
-        texto=markdown,
-        source=uploaded_file.filename
-        )
-    chunks = dividir_documentos(document)
-
-    # Prepare records for DB and bulk insert
-    processed_records = preparar_chunks_para_banco(
-        chunks,
-        project_id=project_id
-    )
     if not processed_records:
         raise HTTPException(
             status_code=400,
             detail="No content extracted from PDF"
         )
 
-    # Bulk insert using async session
-    await session.execute(insert(FileContent), processed_records)
-    await session.commit()
+    # Save to database using service
+    chunks_inserted = await FileContentService.bulk_create(
+        records=processed_records,
+        session=session,
+    )
 
     return {
         "message": "PDF processed successfully",
-        "chunks_inserted": len(processed_records),
+        "chunks_inserted": chunks_inserted,
     }
 
 
@@ -237,3 +238,114 @@ async def delete_file_from_project(
         "message": f"File '{filename}' deleted successfully",
         "chunks_deleted": len(matching_files),
     }
+
+
+@router.post("/stream")
+async def chat_with_documents_stream(
+    request: ChatRequest,
+    session: Session,
+    current_user: CurrentUser,
+):
+    # 1. Verifica se o projeto pertence ao usuário
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == request.project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+
+    # 2. Verifica se o projeto tem documentos
+    file_exists = await session.scalar(
+        select(FileContent)
+        .where(FileContent.project_id == request.project_id)
+        .limit(1)
+    )
+    if not file_exists:
+        raise HTTPException(
+            status_code=400,
+            detail="Projeto não possui documentos"
+        )
+
+    # 3. Contexto do agente
+    context = ProjectContext(
+        project_id=request.project_id,
+        session=session
+    )
+
+    async def event_generator():
+        try:
+            # tool_results = {}
+
+            async for token, metadata in agent.astream(
+                {
+                    "messages": [
+                        {"role": "user", "content": request.query}
+                    ]
+                },
+                context=context,
+                stream_mode="messages",
+            ):
+
+                # 1️⃣ Tool call (modelo requisitando ferramenta)
+                if getattr(token, "tool_calls", None):
+                    # for tool_call in token.tool_calls:
+                    #     print(f"[tool_call] {tool_call['name']}")
+                    for tool_call in token.tool_calls:
+                        data = {
+                            "type": "tool_call",
+                            "tool_name": tool_call.get("name"),
+                            "tool_id": tool_call.get("id"),
+                            "args": tool_call.get("args", {})
+                        }
+                        yield f"data: {json.dumps(data, ensure_ascii=False)}\n"
+
+                # 2️⃣ Tool result (retorno da ferramenta)
+                elif isinstance(token, ToolMessage):
+                    # tool_results[token.tool_call_id] = {
+                    #     "tool_name": token.name,
+                    #     "content": token.content,
+                    # }
+                    # # ❌ não printa
+                    # continue
+                    data = {
+                        "type": "tool_result",
+                        "tool_name": token.name,
+                        "content": str(token.content)
+                    }
+                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+                # 3️⃣ Texto normal do modelo
+                elif token.content:
+                    # print(token.content, end="", flush=True)
+                    data = {
+                        "type": "token",
+                        "content": token.content
+                    }
+                    # ✅ AQUI está o yield que faltava!
+                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+            # Sinal de conclusão
+            data = {"type": "done"}
+            yield f"data: {json.dumps(data)}\n\n"
+
+        # except Exception as exc:
+        #     yield f"\n[ERRO]: {exc}"
+        except Exception as exc:
+            data = {
+                "type": "error",
+                "message": str(exc)
+            }
+            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        # media_type="text/plain; charset=utf-8"
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

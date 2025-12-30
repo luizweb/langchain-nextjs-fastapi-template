@@ -69,3 +69,19 @@ class FilesList(BaseModel):
     files: list[FileContentPublic]
     total_files: int
     total_chunks: int
+
+
+class ChatRequest(BaseModel):
+    """Schema para request do chat."""
+    query: str = Field(..., description="Query para buscar nos documentos")
+    project_id: int = Field(
+        ...,
+        description="ID do projeto para buscar documentos"
+    )
+
+
+# class ChatResponse(BaseModel):
+#     """Schema para response do chat."""
+#     answer: str = Field(..., description="Resposta do agente RAG")
+#     query: str = Field(..., description="Query original")
+#     project_id: int = Field(..., description="ID do projeto")
