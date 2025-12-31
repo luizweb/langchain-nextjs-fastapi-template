@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { FaGithub } from "react-icons/fa";
-import { Badge } from "@/components/ui/badge";
+
 
 export default function Home() {
   return (
@@ -16,8 +15,8 @@ export default function Home() {
 
         {/* Link to Projects */}
         <Link href="/projects">
-          <Button className="px-8 py-4 text-xl font-semibold rounded-full shadow-lg bg-gradient-to-r from-green-700 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-600 focus:ring-4 focus:ring-blue-300">
-            Acessar Meus Projetos
+          <Button className="px-8 py-4 text-xl font-semibold rounded-lg shadow-lg bg-black text-white hover:bg-gray-800 focus:ring-4 focus:ring-blue-300">
+            Explorar Projetos
           </Button>
         </Link>
 

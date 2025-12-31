@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LogIn, LogOut, ShieldUser, User, UserPlus, FolderOpen } from "lucide-react";
+import { Bot, LogIn, LogOut, ShieldUser, User, UserPlus, FolderOpen } from "lucide-react";
 
 // ===============================
 // Tipo para os dados do usuário extraídos do token JWT
@@ -116,7 +116,7 @@ export function Header() {
         <div className="flex h-14 items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded bg-primary flex items-center justify-center">
-              <span className="text-green-foreground font-bold text-sm">CN</span>
+              <Bot className="h-5 w-5 text-green-foreground" />
             </div>
             <span className="font-semibold text-lg">ChatNext</span>
           </Link>
@@ -131,7 +131,7 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <div className="h-8 w-8 rounded bg-green-800 flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">CN</span>
+            <Bot className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="font-semibold text-lg">ChatNext</span>
         </Link>
