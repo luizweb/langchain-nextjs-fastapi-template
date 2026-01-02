@@ -2,7 +2,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,11 +66,16 @@ async def create_user(user: UserSchema, session: Session):
 async def read_users(
     session: Session, filter_users: Annotated[FilterPage, Query()]
 ):
+    # Busca o total de usuários
+    total_query = await session.scalar(select(func.count(User.id)))
+    total = total_query or 0
+
+    # Busca os usuários paginados
     query = await session.scalars(
         select(User).offset(filter_users.offset).limit(filter_users.limit)
     )
     users = query.all()
-    return {'users': users}
+    return {'users': users, 'total': total}
 
 
 @router.get('/me', response_model=UserPublic)

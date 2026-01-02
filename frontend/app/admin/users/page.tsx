@@ -102,6 +102,7 @@ type UserType = {
 // Tipo para a resposta completa da API
 type ApiResponse = {
   users: UserType[];
+  total: number;
 };
 
 export default function AdminUsersPage() {
@@ -116,10 +117,11 @@ export default function AdminUsersPage() {
   // PASSO 2: Estados para gerenciar dados, loading e erros
   // ===============================
   const [users, setUsers] = useState<UserType[]>([]);        // Lista de usuários da API
+  const [totalUsers, setTotalUsers] = useState(0);           // Total de usuários (para paginação)
   const [isLoading, setIsLoading] = useState(true);          // Estado de carregamento
   const [error, setError] = useState<string | null>(null);   // Estado de erro
   const [deletingUser, setDeletingUser] = useState<UserType | null>(null);
-  
+
   // Estados para o modal de criação de usuário
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -128,7 +130,7 @@ export default function AdminUsersPage() {
   const [newPassword, setNewPassword] = useState("");
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  
+
   // Estados para paginação
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; // Quantidade de itens por página
@@ -197,39 +199,46 @@ export default function AdminUsersPage() {
   useEffect(() => {
     // Só busca usuários se já passou na verificação de autorização
     if (isAuthChecking) return;
-    
+
     const fetchUsers = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        
-        // PASSO 3.1: Faz a requisição GET para a API
-        const response = await fetch("http://localhost:8000/users/");
-        
-        // PASSO 3.2: Verifica se a resposta foi bem sucedida
+
+        // PASSO 3.1: Calcula o offset baseado na página atual
+        const offset = (currentPage - 1) * itemsPerPage;
+
+        // PASSO 3.2: Faz a requisição GET para a API com parâmetros de paginação
+        const response = await fetch(
+          `http://localhost:8000/users/?offset=${offset}&limit=${itemsPerPage}`
+        );
+
+        // PASSO 3.3: Verifica se a resposta foi bem sucedida
         if (!response.ok) {
           throw new Error(`Erro ao carregar usuários: ${response.status}`);
         }
-        
-        // PASSO 3.3: Converte a resposta para JSON
+
+        // PASSO 3.4: Converte a resposta para JSON
         const data: ApiResponse = await response.json();
-        
-        // PASSO 3.4: Atualiza o estado com os usuários recebidos
+
+        // PASSO 3.5: Atualiza o estado com os usuários recebidos e o total
         console.log("=== DADOS DA API ===");
-        console.log(data.users);
+        console.log("Usuários:", data.users);
+        console.log("Total:", data.total);
         console.log("====================");
         setUsers(data.users);
+        setTotalUsers(data.total);
       } catch (err) {
-        // PASSO 3.5: Em caso de erro, salva a mensagem de erro
+        // PASSO 3.6: Em caso de erro, salva a mensagem de erro
         setError(err instanceof Error ? err.message : "Erro desconhecido");
       } finally {
-        // PASSO 3.6: Finaliza o loading independente do resultado
+        // PASSO 3.7: Finaliza o loading independente do resultado
         setIsLoading(false);
       }
     };
 
     fetchUsers();
-  }, [isAuthChecking]); // Executa quando a verificação de autorização terminar
+  }, [isAuthChecking, currentPage]); // Executa quando a verificação de autorização terminar OU quando mudar de página
 
   const handleDeleteClick = (user: UserType) => {
     setDeletingUser(user);
@@ -276,17 +285,17 @@ export default function AdminUsersPage() {
       }
 
       const newUser = await response.json();
-      
-      // Adiciona o novo usuário à lista
-      setUsers([...users, newUser]);
-      
+
       // Limpa o formulário e fecha o modal
       setNewUsername("");
       setNewEmail("");
       setNewPassword("");
       setNewIsAdmin(false);
       setIsCreateModalOpen(false);
-      
+
+      // Volta para a primeira página para ver o novo usuário
+      setCurrentPage(1);
+
       console.log("Usuário criado com sucesso:", newUser);
       
     } catch (err) {
@@ -331,8 +340,8 @@ export default function AdminUsersPage() {
         throw new Error(errorData.detail || "Erro ao excluir usuário");
       }
 
-      // Sucesso: Remove o usuário da lista local
-      setUsers(users.filter(u => u.id !== deletingUser.id));
+      // Sucesso: Volta para a primeira página para recarregar a lista
+      setCurrentPage(1);
       console.log("Usuário excluído com sucesso:", deletingUser);
       
     } catch (err) {
@@ -375,7 +384,7 @@ export default function AdminUsersPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-medium">Usuários</h2>
           <span className="text-sm text-muted-foreground">
-            {users.length} usuário{users.length !== 1 ? 's' : ''}
+            {totalUsers} usuário{totalUsers !== 1 ? 's' : ''}
           </span>
         </div>
 
@@ -420,10 +429,8 @@ export default function AdminUsersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                // Paginação: filtra os usuários da página atual
-                users
-                  .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-                  .map((user) => (
+                // Os usuários já vêm paginados da API
+                users.map((user) => (
                   <TableRow key={user.id} className="border-b border-gray-100 hover:bg-gray-200">
                     {/* PASSO 6: Adaptação dos campos para o formato da API */}
                     <TableCell className="text-muted-foreground">{user.id}</TableCell>
@@ -441,10 +448,22 @@ export default function AdminUsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      {user.created_at ? user.created_at.split(' ')[0].split('-').reverse().join('/') : '-'}
+                      {user.created_at ? new Date(user.created_at).toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      {user.updated_at ? user.updated_at.split(' ')[0].split('-').reverse().join('/') : '-'}
+                      {user.updated_at ? new Date(user.updated_at).toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -473,10 +492,10 @@ export default function AdminUsersPage() {
         )}
 
         {/* Paginação */}
-        {!isLoading && !error && users.length > 0 && (
+        {!isLoading && !error && totalUsers > 0 && (
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
             <span className="text-sm text-muted-foreground">
-              Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, users.length)} a {Math.min(currentPage * itemsPerPage, users.length)} de {users.length} registros
+              Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, totalUsers)} a {Math.min(currentPage * itemsPerPage, totalUsers)} de {totalUsers} registros
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -490,13 +509,13 @@ export default function AdminUsersPage() {
                 Anterior
               </Button>
               <span className="text-sm px-2">
-                Página {currentPage} de {Math.ceil(users.length / itemsPerPage) || 1}
+                Página {currentPage} de {Math.ceil(totalUsers / itemsPerPage) || 1}
               </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(p => Math.min(Math.ceil(users.length / itemsPerPage), p + 1))}
-                disabled={currentPage >= Math.ceil(users.length / itemsPerPage)}
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalUsers / itemsPerPage), p + 1))}
+                disabled={currentPage >= Math.ceil(totalUsers / itemsPerPage)}
                 className="h-8"
               >
                 Próxima

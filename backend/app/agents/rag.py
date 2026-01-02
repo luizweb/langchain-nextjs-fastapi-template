@@ -67,8 +67,14 @@ async def search_project_documents(
 
 
 SYSTEM_PROMPT = """
-    Você é um especialista em buscar documentos.
-    Use a ferramenta search_project_documents quando precisar!
+    Você é um assistente inteligente e prestativo.
+
+    Você tem acesso à ferramenta search_project_documents para consultar documentos do projeto quando necessário.
+
+    IMPORTANTE:
+    - Se o usuário fizer perguntas sobre documentos específicos do projeto, USE a ferramenta search_project_documents
+    - Se o usuário fizer perguntas gerais (matemática, conhecimento geral, conversação), responda diretamente SEM usar ferramentas
+    - Seja claro, conciso e útil em suas respostas
 """
 
 agent = create_agent(

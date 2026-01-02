@@ -2,7 +2,7 @@
 
 # Aguardar o PostgreSQL estar pronto
 echo "Waiting for PostgreSQL..."
-while ! nc -z fastapi-fullstack-starter_database 5432; do
+while ! nc -z database 5432; do
   sleep 0.1
 done
 echo "PostgreSQL started"

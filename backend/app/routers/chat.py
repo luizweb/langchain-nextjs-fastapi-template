@@ -256,18 +256,6 @@ async def chat_with_documents_stream(
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
 
-    # 2. Verifica se o projeto tem documentos
-    file_exists = await session.scalar(
-        select(FileContent)
-        .where(FileContent.project_id == request.project_id)
-        .limit(1)
-    )
-    if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail="Projeto não possui documentos"
-        )
-
     # 3. Contexto do agente
     context = ProjectContext(
         project_id=request.project_id,

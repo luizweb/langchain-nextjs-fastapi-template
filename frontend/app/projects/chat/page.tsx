@@ -5,12 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText, Trash2, Upload, Send, ArrowLeft, Loader2, CheckCircle, XCircle, StopCircle, Wrench, FileSearch } from "lucide-react";
+import { FileText, Trash2, Upload, Send, ArrowLeft, Loader2, CheckCircle, XCircle, StopCircle, Wrench, FileSearch, ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import ReactMarkdown from 'react-markdown';
-import { ChevronDown, ChevronRight } from 'lucide-react'; 
+import remarkGfm from 'remark-gfm';
 
 // ===============================
 // Tipos
@@ -29,14 +28,8 @@ type UploadedFile = {
   created_at: string;
 };
 
-type FilesResponse = {
-  files: UploadedFile[];
-  total_files: number;
-  total_chunks: number;
-};
-
 type ChatMessage = {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant";
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
@@ -54,91 +47,117 @@ type ToolResult = {
 };
 
 // ===============================
+// Constantes
+// ===============================
+const API_URL = "http://localhost:8000";
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// ===============================
+// Hook de autenticação
+// ===============================
+const useAuth = () => {
+  const router = useRouter();
+
+  const getToken = () => localStorage.getItem("access_token");
+
+  const logout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("token_type");
+    router.push("/login");
+  };
+
+  const checkAuth = async (response: Response) => {
+    if (response.status === 401) {
+      logout();
+      return false;
+    }
+    return true;
+  };
+
+  return { getToken, logout, checkAuth };
+};
+
+// ===============================
 // Componente interno que usa useSearchParams
 // ===============================
 function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("id");
-  
-  // PROJETO - ARQUIVOS
+  const { getToken, logout, checkAuth } = useAuth();
+
+  // Estados do projeto e arquivos
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(true);
+
+  // Estados de upload
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [uploadMessage, setUploadMessage] = useState<string>('');
-  const [filesLoading, setFilesLoading] = useState(true);
-  const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // CHAT
+  // Estados de exclusão
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+
+  // Estados do chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null); 
   const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll automático para o final
+  // ===============================
+  // Funções auxiliares
+  // ===============================
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Scroll quando mensagens mudarem
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const showMessage = (status: 'success' | 'error', message: string, duration = 3000) => {
+    setUploadStatus(status);
+    setUploadMessage(message);
+    setTimeout(() => {
+      setUploadStatus('idle');
+      setUploadMessage('');
+    }, duration);
+  };
 
-  // Toggle de tool results
   const toggleToolResult = (messageIdx: number, resultIdx: number) => {
     const key = `${messageIdx}-${resultIdx}`;
     setExpandedToolResults(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
+      newSet.has(key) ? newSet.delete(key) : newSet.add(key);
       return newSet;
     });
   };
 
   // ===============================
-  // Função para buscar arquivos do projeto
+  // API: Buscar arquivos do projeto
   // ===============================
   const fetchProjectFiles = async () => {
     if (!projectId) return;
 
     try {
       setFilesLoading(true);
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+      const token = getToken();
+      if (!token) return logout();
 
-      const response = await fetch(`http://localhost:8000/chat/files/${projectId}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+      const response = await fetch(`${API_URL}/chat/files/${projectId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("token_type");
-          router.push("/login");
-          return;
-        }
-        throw new Error("Erro ao carregar arquivos");
-      }
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) throw new Error("Erro ao carregar arquivos");
 
-      const data: FilesResponse = await response.json();
+      const data = await response.json();
       setUploadedFiles(data.files || []);
-      
     } catch (err) {
       console.error("Erro ao buscar arquivos:", err);
       setUploadedFiles([]);
@@ -148,270 +167,155 @@ function ChatContent() {
   };
 
   // ===============================
-  // Função de upload de arquivo PDF
+  // API: Upload de arquivo
   // ===============================
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    
-    if (!file) return;
-
-    // Validação do tipo de arquivo
+  const uploadFile = async (file: File) => {
     if (file.type !== 'application/pdf') {
-      setUploadStatus('error');
-      setUploadMessage('Apenas arquivos PDF são permitidos.');
-      return;
+      return showMessage('error', 'Apenas arquivos PDF são permitidos.', 5000);
     }
 
-    // Validação do tamanho (opcional - máximo 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      setUploadStatus('error');
-      setUploadMessage('O arquivo deve ter no máximo 10MB.');
-      return;
+    if (file.size > MAX_FILE_SIZE) {
+      return showMessage('error', 'O arquivo deve ter no máximo 10MB.', 5000);
     }
 
     if (!projectId) {
-      setUploadStatus('error');
-      setUploadMessage('ID do projeto não encontrado.');
-      return;
+      return showMessage('error', 'ID do projeto não encontrado.');
     }
 
     try {
       setIsUploading(true);
       setUploadProgress(0);
       setUploadStatus('idle');
-      setUploadMessage('');
 
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+      const token = getToken();
+      if (!token) return logout();
 
-      // Simula progresso de upload
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
+        setUploadProgress(prev => prev >= 90 ? 90 : prev + 10);
       }, 200);
 
       const formData = new FormData();
       formData.append('uploaded_file', file);
 
-      const response = await fetch(`http://localhost:8000/chat/upload/${projectId}`, {
+      const response = await fetch(`${API_URL}/chat/upload/${projectId}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
+      if (!(await checkAuth(response))) return;
       if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("token_type");
-          router.push("/login");
-          return;
-        }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Erro no upload: ${response.status}`);
       }
 
-      setUploadStatus('success');
-      setUploadMessage('Arquivo enviado com sucesso!');
-      
-      // Recarrega a lista de arquivos após upload bem-sucedido
+      showMessage('success', 'Arquivo enviado com sucesso!', 5000);
       await fetchProjectFiles();
-      
-      // Limpa o input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
       console.error('Erro no upload:', err);
-      setUploadStatus('error');
-      setUploadMessage(err instanceof Error ? err.message : 'Erro desconhecido no upload');
+      showMessage('error', err instanceof Error ? err.message : 'Erro desconhecido no upload', 5000);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
-      
-      // Limpa a mensagem após 5 segundos
-      setTimeout(() => {
-        setUploadStatus('idle');
-        setUploadMessage('');
-      }, 5000);
     }
   };
 
   // ===============================
-  // Função para deletar arquivo
+  // Handlers de drag & drop
   // ===============================
-  const handleDeleteFile = async (filename: string) => {
-    if (!projectId) return;
+  const handleDragEvents = (e: React.DragEvent, isDragging: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragleave' && e.currentTarget !== e.target) return;
+    setIsDragging(isDragging);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    handleDragEvents(e, false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) await uploadFile(file);
+  };
+
+  // ===============================
+  // API: Deletar arquivo
+  // ===============================
+  const handleDeleteFile = async () => {
+    if (!fileToDelete || !projectId) return;
 
     try {
-      setDeletingFile(filename);
-      
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+      setDeletingFile(fileToDelete);
+      const token = getToken();
+      if (!token) return logout();
 
-      const response = await fetch(`http://localhost:8000/chat/files/${projectId}/${encodeURIComponent(filename)}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("token_type");
-          router.push("/login");
-          return;
+      const response = await fetch(
+        `${API_URL}/chat/files/${projectId}/${encodeURIComponent(fileToDelete)}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
         }
+      );
+
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Erro ao deletar arquivo: ${response.status}`);
       }
 
-      // Remove o arquivo da lista local
-      setUploadedFiles(prev => prev.filter(file => file.filename !== filename));
-      
-      console.log("Arquivo deletado com sucesso:", filename);
-
+      setUploadedFiles(prev => prev.filter(file => file.filename !== fileToDelete));
+      showMessage('success', 'Arquivo deletado com sucesso!');
     } catch (err) {
       console.error('Erro ao deletar arquivo:', err);
-      setUploadStatus('error');
-      setUploadMessage(err instanceof Error ? err.message : 'Erro desconhecido ao deletar arquivo');
-      
-      // Limpa a mensagem após 5 segundos
-      setTimeout(() => {
-        setUploadStatus('idle');
-        setUploadMessage('');
-      }, 5000);
+      showMessage('error', err instanceof Error ? err.message : 'Erro desconhecido ao deletar arquivo');
     } finally {
       setDeletingFile(null);
+      setFileToDelete(null);
     }
   };
 
   // ===============================
-  // Função para abrir seletor de arquivo
-  // ===============================
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
-
-  // ===============================
-  // Busca dados do projeto via API
-  // ===============================
-  useEffect(() => {
-    const fetchProject = async () => {
-      // Verifica se há ID na URL
-      if (!projectId) {
-        setError("Projeto não encontrado");
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const token = localStorage.getItem("access_token");
-
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-
-        // Busca todos os projetos e filtra pelo ID
-        const response = await fetch("http://localhost:8000/projects", {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("token_type");
-            router.push("/login");
-            return;
-          }
-          throw new Error("Erro ao carregar projeto");
-        }
-
-        const data = await response.json();
-        
-        // Encontra o projeto pelo ID
-        const foundProject = data.projects.find(
-          (p: Project) => p.id === parseInt(projectId)
-        );
-
-        if (!foundProject) {
-          setError("Projeto não encontrado");
-        } else {
-          setProject(foundProject);
-          // Busca arquivos do projeto após carregar os dados do projeto
-          await fetchProjectFiles();
-        }
-
-      } catch (err) {
-        console.error("Erro ao buscar projeto:", err);
-        setError(err instanceof Error ? err.message : "Erro desconhecido");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchProject();
-  }, [projectId, router]);
-
-  
-  // ===============================
-  // CHAT
+  // API: Enviar mensagem do chat
   // ===============================
   const sendMessage = async () => {
     if (!input.trim() || !projectId) return;
 
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    const token = getToken();
+    if (!token) return logout();
 
     const userMessage = input;
-    
-    // Adiciona mensagem do usuário e placeholder para o assistente
     setMessages(prev => [
       ...prev,
       { role: "user", content: userMessage },
       { role: "assistant", content: "", toolCalls: [], toolResults: [] },
     ]);
-
     setInput("");
     setIsStreaming(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // ✅ Acumuladores locais
     let accumulatedContent = "";
     let accumulatedToolCalls: ToolCall[] = [];
     let accumulatedToolResults: ToolResult[] = [];
 
+    const updateLastMessage = () => {
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg?.role === "assistant") {
+          lastMsg.content = accumulatedContent;
+          lastMsg.toolCalls = accumulatedToolCalls;
+          lastMsg.toolResults = accumulatedToolResults;
+        }
+        return updated;
+      });
+    };
+
     try {
-      const response = await fetch("http://localhost:8000/chat/stream", {
+      const response = await fetch(`${API_URL}/chat/stream`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -424,13 +328,8 @@ function ChatContent() {
         signal: controller.signal,
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error("Stream não suportado pelo navegador");
-      }
+      if (!response.ok) throw new Error(`Erro na requisição: ${response.status}`);
+      if (!response.body) throw new Error("Stream não suportado pelo navegador");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
@@ -441,107 +340,57 @@ function ChatContent() {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        
         let boundary = buffer.indexOf("\n\n");
-        
+
         while (boundary !== -1) {
           const message = buffer.slice(0, boundary);
           buffer = buffer.slice(boundary + 2);
-          
+
           const lines = message.split("\n");
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const jsonStr = line.slice(6).trim();
-              
-              if (!jsonStr) continue;
-              
-              try {
-                const data = JSON.parse(jsonStr);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
 
-                switch (data.type) {
-                  case "token":
-                    // ✅ Acumula localmente
-                    accumulatedContent += data.content;
-                    
-                    // ✅ Atualiza o estado de uma vez
-                    setMessages(prev => {
-                      const updated = [...prev];
-                      const lastMsg = updated[updated.length - 1];
-                      if (lastMsg?.role === "assistant") {
-                        lastMsg.content = accumulatedContent;
-                        lastMsg.toolCalls = accumulatedToolCalls;
-                        lastMsg.toolResults = accumulatedToolResults;
-                      }
-                      return updated;
-                    });
-                    break;
+            try {
+              const data = JSON.parse(jsonStr);
 
-                  case "tool_call":
-                    accumulatedToolCalls.push({
-                      tool_name: data.tool_name,
-                      tool_id: data.tool_id,
-                      args: data.args,
-                    });
-                    
-                    setMessages(prev => {
-                      const updated = [...prev];
-                      const lastMsg = updated[updated.length - 1];
-                      if (lastMsg?.role === "assistant") {
-                        lastMsg.content = accumulatedContent;
-                        lastMsg.toolCalls = [...accumulatedToolCalls];
-                        lastMsg.toolResults = accumulatedToolResults;
-                      }
-                      return updated;
-                    });
-                    break;
-
-                  case "tool_result":
-                    accumulatedToolResults.push({
-                      tool_name: data.tool_name,
-                      content: data.content,
-                    });
-                    
-                    setMessages(prev => {
-                      const updated = [...prev];
-                      const lastMsg = updated[updated.length - 1];
-                      if (lastMsg?.role === "assistant") {
-                        lastMsg.content = accumulatedContent;
-                        lastMsg.toolCalls = accumulatedToolCalls;
-                        lastMsg.toolResults = [...accumulatedToolResults];
-                      }
-                      return updated;
-                    });
-                    break;
-
-                  case "done":
-                    console.log("Streaming concluído");
-                    break;
-
-                  case "error":
-                    accumulatedContent = `❌ Erro: ${data.message}`;
-                    setMessages(prev => {
-                      const updated = [...prev];
-                      const lastMsg = updated[updated.length - 1];
-                      if (lastMsg?.role === "assistant") {
-                        lastMsg.content = accumulatedContent;
-                      }
-                      return updated;
-                    });
-                    break;
-                }
-              } catch (parseError) {
-                console.error("Erro ao parsear JSON:", jsonStr, parseError);
+              switch (data.type) {
+                case "token":
+                  accumulatedContent += data.content;
+                  updateLastMessage();
+                  break;
+                case "tool_call":
+                  accumulatedToolCalls.push({
+                    tool_name: data.tool_name,
+                    tool_id: data.tool_id,
+                    args: data.args,
+                  });
+                  updateLastMessage();
+                  break;
+                case "tool_result":
+                  accumulatedToolResults.push({
+                    tool_name: data.tool_name,
+                    content: data.content,
+                  });
+                  updateLastMessage();
+                  break;
+                case "error":
+                  accumulatedContent = `❌ Erro: ${data.message}`;
+                  updateLastMessage();
+                  break;
               }
+            } catch (parseError) {
+              console.error("Erro ao parsear JSON:", jsonStr, parseError);
             }
           }
-          
+
           boundary = buffer.indexOf("\n\n");
         }
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Erro no streaming:", err);
-        
         setMessages(prev => {
           const updated = [...prev];
           const lastMsg = updated[updated.length - 1];
@@ -557,13 +406,57 @@ function ChatContent() {
     }
   };
 
-  // STOP STREAMING
-  const stopStreaming = () => {
-    abortControllerRef.current?.abort();
-    setIsStreaming(false);
-  };
+  // ===============================
+  // Buscar projeto ao montar
+  // ===============================
+  useEffect(() => {
+    const fetchProject = async () => {
+      if (!projectId) {
+        setError("Projeto não encontrado");
+        setIsLoading(false);
+        return;
+      }
 
-  // Loading state
+      try {
+        setIsLoading(true);
+        setError(null);
+        const token = getToken();
+        if (!token) return logout();
+
+        const response = await fetch(`${API_URL}/projects`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+
+        if (!(await checkAuth(response))) return;
+        if (!response.ok) throw new Error("Erro ao carregar projeto");
+
+        const data = await response.json();
+        const foundProject = data.projects.find((p: Project) => p.id === parseInt(projectId));
+
+        if (!foundProject) {
+          setError("Projeto não encontrado");
+        } else {
+          setProject(foundProject);
+          await fetchProjectFiles();
+        }
+      } catch (err) {
+        console.error("Erro ao buscar projeto:", err);
+        setError(err instanceof Error ? err.message : "Erro desconhecido");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProject();
+  }, [projectId]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // ===============================
+  // Estados de carregamento e erro
+  // ===============================
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -573,21 +466,31 @@ function ChatContent() {
     );
   }
 
-  // Error state
   if (error || !project) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-destructive">{error || "Projeto não encontrado"}</p>
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+          <XCircle className="h-8 w-8 text-destructive" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-lg font-semibold">Projeto não encontrado</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            {error || "Este projeto não existe ou você não tem permissão para acessá-lo. Verifique o link ou escolha outro projeto da sua lista."}
+          </p>
+        </div>
         <Link href="/projects">
-          <Button variant="outline">
+          <Button>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar para Projetos
+            Ver meus projetos
           </Button>
         </Link>
       </div>
     );
   }
 
+  // ===============================
+  // Render principal
+  // ===============================
   return (
     <div className="flex h-full">
       {/* Sidebar */}
@@ -601,9 +504,6 @@ function ChatContent() {
           <h2 className="font-semibold text-lg">{project.title}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {project.description || "Sem descrição"}
-          </p>
-          <p className="text-xs text-muted-foreground/50 mt-2">
-            Ref: #{project.id}
           </p>
         </div>
 
@@ -634,7 +534,7 @@ function ChatContent() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleDeleteFile(file.filename)}
+                      onClick={() => setFileToDelete(file.filename)}
                       disabled={deletingFile === file.filename}
                     >
                       {deletingFile === file.filename ? (
@@ -660,39 +560,60 @@ function ChatContent() {
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
-            onChange={handleFileUpload}
+            onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
             className="hidden"
           />
-          
-          <Button
-            onClick={triggerFileInput}
-            disabled={isUploading}
-            variant="outline"
-            className="w-full"
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Enviando... {uploadProgress}%
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload PDF
-              </>
-            )}
-          </Button>
 
-          {/* Upload Status */}
+          <div
+            onDragEnter={(e) => handleDragEvents(e, true)}
+            onDragLeave={(e) => handleDragEvents(e, false)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            className={`
+              relative border-2 border-dashed rounded-lg p-4 transition-all cursor-pointer
+              ${isDragging ? 'border-primary bg-primary/5 scale-[1.02]' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-accent/50'}
+              ${isUploading ? 'cursor-not-allowed opacity-60' : ''}
+            `}
+          >
+            <div className="flex flex-col items-center gap-2 text-center pointer-events-none">
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <div className="w-full space-y-1">
+                    <p className="text-xs font-medium">Enviando arquivo...</p>
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{uploadProgress}%</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Upload className={`h-6 w-6 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {isDragging ? 'Solte o arquivo aqui' : 'Clique ou arraste um PDF'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Máximo 10MB</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {uploadStatus !== 'idle' && (
-            <div className={`flex items-center gap-2 text-sm p-2 rounded ${
+            <div className={`flex items-center gap-2 text-sm p-2 rounded animate-in fade-in slide-in-from-top-2 ${
               uploadStatus === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300' :
               'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
             }`}>
               {uploadStatus === 'success' ? (
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle className="h-4 w-4 flex-shrink-0" />
               ) : (
-                <XCircle className="h-4 w-4" />
+                <XCircle className="h-4 w-4 flex-shrink-0" />
               )}
               <span className="text-xs">{uploadMessage}</span>
             </div>
@@ -700,16 +621,58 @@ function ChatContent() {
         </div>
       </aside>
 
-      
+      {/* Diálogo de Confirmação de Exclusão */}
+      {fileToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
+          <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold mb-2">Confirmar exclusão</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Tem certeza que deseja deletar <span className="font-medium text-foreground">{fileToDelete}</span>?
+              Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setFileToDelete(null)} disabled={!!deletingFile}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteFile} disabled={!!deletingFile}>
+                {deletingFile ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deletando...
+                  </>
+                ) : (
+                  'Deletar'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Chat Area */}
       <main className="flex-1 flex flex-col h-full">
-        {/* Chat Messages */}
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="max-w-4xl mx-auto space-y-4 p-4">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Send className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold">Pronto para conversar!</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      {uploadedFiles.length > 0
+                        ? `Faça perguntas sobre os ${uploadedFiles.length} documento${uploadedFiles.length > 1 ? 's' : ''} carregado${uploadedFiles.length > 1 ? 's' : ''} ou converse sobre qualquer assunto.`
+                        : 'Você pode fazer perguntas sobre qualquer assunto. Para consultar documentos específicos, faça upload de PDFs na barra lateral.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {messages.map((msg, idx) => (
                 <div key={idx}>
-                  {/* Mensagem do Usuário */}
                   {msg.role === "user" && (
                     <Card className="py-0 bg-gray-200 ml-auto max-w-[50%]">
                       <CardContent className="p-3 text-sm font-bold text-gray-900 whitespace-pre-wrap">
@@ -718,16 +681,14 @@ function ChatContent() {
                     </Card>
                   )}
 
-                  {/* Mensagem do Assistente */}
                   {msg.role === "assistant" && (
                     <div className="space-y-2">
-                      {/* Tool Calls - ACIMA da resposta */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
                         <div className="space-y-1">
                           {msg.toolCalls.map((tool, toolIdx) => (
                             <div
                               key={toolIdx}
-                              className="flex items-center gap-2 text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 rounded"
+                              className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 rounded"
                             >
                               <Wrench className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                               <span>
@@ -738,19 +699,17 @@ function ChatContent() {
                         </div>
                       )}
 
-                      {/* Tool Results - ACIMA da resposta, com toggle */}
                       {msg.toolResults && msg.toolResults.length > 0 && (
                         <div className="space-y-1">
                           {msg.toolResults.map((result, resultIdx) => {
                             const key = `${idx}-${resultIdx}`;
                             const isExpanded = expandedToolResults.has(key);
-                            
+
                             return (
                               <div
                                 key={resultIdx}
                                 className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded overflow-hidden"
                               >
-                                {/* Header clicável */}
                                 <button
                                   onClick={() => toggleToolResult(idx, resultIdx)}
                                   className="w-full flex items-center justify-between gap-2 text-xs p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
@@ -768,7 +727,6 @@ function ChatContent() {
                                   )}
                                 </button>
 
-                                {/* Conteúdo expansível */}
                                 {isExpanded && (
                                   <div className="px-2 pb-2 text-xs text-muted-foreground border-t border-blue-200 dark:border-blue-800 pt-2">
                                     <pre className="whitespace-pre-wrap font-mono text-xs">
@@ -782,43 +740,10 @@ function ChatContent() {
                         </div>
                       )}
 
-                      {/* Resposta Final - COM MARKDOWN */}
                       {msg.content && (
                         <Card className="bg-background">
-                          <CardContent className="p-3 text-sm prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown
-                              components={{
-                                // Customiza elementos específicos se necessário
-                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                                ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
-                                ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
-                                li: ({ children }) => <li className="mb-1">{children}</li>,
-                                code: ({ inline, children, ...props }: any) => 
-                                  inline ? (
-                                    <code className="bg-muted px-1 py-0.5 rounded text-xs" {...props}>
-                                      {children}
-                                    </code>
-                                  ) : (
-                                    <code className="block bg-muted p-2 rounded text-xs overflow-x-auto" {...props}>
-                                      {children}
-                                    </code>
-                                  ),
-                                pre: ({ children }) => <pre className="bg-muted p-2 rounded overflow-x-auto mb-2">{children}</pre>,
-                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                                h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                                h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                                blockquote: ({ children }) => (
-                                  <blockquote className="border-l-4 border-muted pl-3 italic my-2">
-                                    {children}
-                                  </blockquote>
-                                ),
-                                a: ({ children, href }) => (
-                                  <a href={href} className="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">
-                                    {children}
-                                  </a>
-                                ),
-                              }}
-                            >
+                          <CardContent className="p-3 text-sm prose prose-sm dark:prose-invert max-w-none prose-table:text-sm">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {msg.content}
                             </ReactMarkdown>
                           </CardContent>
@@ -836,20 +761,22 @@ function ChatContent() {
                 </div>
               )}
 
-              {/* Elemento invisível para scroll */}
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
         </div>
 
-        {/* Input Area - mantém igual */}
         <div className="border-t p-4 shrink-0">
           <div className="max-w-4xl mx-auto">
             <div className="flex gap-2">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Digite sua pergunta..."
+                placeholder={
+                  uploadedFiles.length > 0
+                    ? "Pergunte sobre os documentos ou qualquer outro assunto..."
+                    : "Digite sua pergunta..."
+                }
                 disabled={isStreaming}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -862,7 +789,7 @@ function ChatContent() {
               <Button
                 size="icon"
                 className="h-[60px] w-[60px]"
-                onClick={isStreaming ? stopStreaming : sendMessage}
+                onClick={isStreaming ? () => abortControllerRef.current?.abort() : sendMessage}
               >
                 {isStreaming ? (
                   <StopCircle className="h-5 w-5" />
@@ -872,9 +799,9 @@ function ChatContent() {
               </Button>
             </div>
 
-            {uploadedFiles.length === 0 && (
+            {uploadedFiles.length === 0 && messages.length > 0 && (
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                ⚠️ Nenhum documento enviado. Faça upload de PDFs para começar a conversar.
+                💡 Dica: Faça upload de PDFs para consultar documentos específicos
               </p>
             )}
           </div>
@@ -884,13 +811,10 @@ function ChatContent() {
   );
 }
 
-// ===============================
-// Componente Principal com Suspense
-// ===============================
 export default function ChatPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     }>

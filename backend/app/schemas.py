@@ -19,12 +19,15 @@ class UserPublic(BaseModel):
     username: str
     email: EmailStr
     is_admin: bool
+    created_at: datetime
+    updated_at: datetime
     # Permite que o schema aceite objetos do SQLAlchemy (ORM)
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserList(BaseModel):
     users: list[UserPublic]
+    total: int
 
 
 class Token(BaseModel):
