@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 from logging.config import fileConfig
 
@@ -10,6 +11,12 @@ from alembic import context
 
 from app.models import table_registry # <------
 from app.settings import Settings # <------
+
+# this is needed for Windows support
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

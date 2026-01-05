@@ -11,12 +11,20 @@ from langchain_core.messages import ToolMessage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.rag import ProjectContext, agent
+from app.agents.rag import ProjectContext, create_rag_agent
 from app.database import get_session
 from app.models import FileContent, Project, User
-from app.schemas import ChatRequest, FileContentPublic, FilesList
+from app.schemas import (
+    ChatRequest,
+    FileContentPublic,
+    FilesList,
+    LLMProviderInfo,
+    LLMProvidersResponse,
+)
 from app.security import get_current_user
 from app.services import FileContentService, PDFProcessingService
+from app.services.llm import LLMFactory
+from app.settings import Settings
 
 # Configure logging para debug
 # logging.basicConfig(level=logging.INFO)
@@ -240,7 +248,31 @@ async def delete_file_from_project(
     }
 
 
-@router.post("/stream")
+@router.get('/providers', response_model=LLMProvidersResponse)
+async def list_llm_providers():
+    """List all available LLM providers and their models.
+
+    Returns:
+        LLMProvidersResponse: List of providers with available models
+    """
+    factory = LLMFactory()
+    settings = Settings()
+
+    providers_info = []
+    for provider_name in factory.list_providers():
+        models = factory.list_models(provider_name)
+        providers_info.append(
+            LLMProviderInfo(name=provider_name, models=models)
+        )
+
+    return LLMProvidersResponse(
+        providers=providers_info,
+        default_provider=settings.DEFAULT_LLM_PROVIDER,
+        default_model=settings.DEFAULT_LLM_MODEL,
+    )
+
+
+@router.post('/stream')
 async def chat_with_documents_stream(
     request: ChatRequest,
     session: Session,
@@ -254,9 +286,21 @@ async def chat_with_documents_stream(
         )
     )
     if not project:
-        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+        raise HTTPException(status_code=404, detail='Projeto não encontrado')
 
-    # 3. Contexto do agente
+    # 2. Get LLM model from factory
+    factory = LLMFactory()
+    llm = factory.get_model(request.provider, request.model)
+    if not llm:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Provider "{request.provider}" not found'
+        )
+
+    # 3. Create RAG agent with selected LLM
+    agent = create_rag_agent(llm)
+
+    # 4. Contexto do agente
     context = ProjectContext(
         project_id=request.project_id,
         session=session
@@ -264,7 +308,8 @@ async def chat_with_documents_stream(
 
     async def event_generator():
         try:
-            # tool_results = {}
+            # Track which tool calls have been sent to avoid duplicates
+            sent_tool_call_ids = set()
 
             async for token, metadata in agent.astream(
                 {
@@ -278,16 +323,18 @@ async def chat_with_documents_stream(
 
                 # 1️⃣ Tool call (modelo requisitando ferramenta)
                 if getattr(token, "tool_calls", None):
-                    # for tool_call in token.tool_calls:
-                    #     print(f"[tool_call] {tool_call['name']}")
                     for tool_call in token.tool_calls:
-                        data = {
-                            "type": "tool_call",
-                            "tool_name": tool_call.get("name"),
-                            "tool_id": tool_call.get("id"),
-                            "args": tool_call.get("args", {})
-                        }
-                        yield f"data: {json.dumps(data, ensure_ascii=False)}\n"
+                        tool_id = tool_call.get("id")
+                        # Only send if we haven't sent this tool call yet
+                        if tool_id and tool_id not in sent_tool_call_ids:
+                            sent_tool_call_ids.add(tool_id)
+                            data = {
+                                "type": "tool_call",
+                                "tool_name": tool_call.get("name"),
+                                "tool_id": tool_id,
+                                "args": tool_call.get("args", {})
+                            }
+                            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
                 # 2️⃣ Tool result (retorno da ferramenta)
                 elif isinstance(token, ToolMessage):

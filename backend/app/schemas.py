@@ -76,11 +76,32 @@ class FilesList(BaseModel):
 
 class ChatRequest(BaseModel):
     """Schema para request do chat."""
-    query: str = Field(..., description="Query para buscar nos documentos")
+    query: str = Field(..., description='Query para buscar nos documentos')
     project_id: int = Field(
         ...,
-        description="ID do projeto para buscar documentos"
+        description='ID do projeto para buscar documentos'
     )
+    provider: str = Field(
+        'ollama',
+        description='LLM provider (ollama, openai, serpro)'
+    )
+    model: str = Field(
+        'gpt-oss:120b-cloud',
+        description='Model name to use'
+    )
+
+
+class LLMProviderInfo(BaseModel):
+    """Schema para informações de um provider LLM."""
+    name: str = Field(..., description='Provider name')
+    models: list[str] = Field(..., description='Available models')
+
+
+class LLMProvidersResponse(BaseModel):
+    """Schema para listar providers e modelos disponíveis."""
+    providers: list[LLMProviderInfo]
+    default_provider: str
+    default_model: str
 
 
 # class ChatResponse(BaseModel):
