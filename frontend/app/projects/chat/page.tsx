@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileText, Trash2, Upload, Send, ArrowLeft, Loader2, CheckCircle, XCircle, StopCircle, Wrench, FileSearch, ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { LLMSelector } from "@/components/llm-selector";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -33,6 +35,8 @@ type ChatMessage = {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  llmProvider?: string;
+  llmModel?: string;
 };
 
 type ToolCall = {
@@ -112,6 +116,10 @@ function ChatContent() {
   const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Estados de seleção LLM
+  const [llmProvider, setLlmProvider] = useState<string>("ollama");
+  const [llmModel, setLlmModel] = useState<string>("gpt-oss:120b-cloud");
 
   // ===============================
   // Funções auxiliares
@@ -289,7 +297,14 @@ function ChatContent() {
     setMessages(prev => [
       ...prev,
       { role: "user", content: userMessage },
-      { role: "assistant", content: "", toolCalls: [], toolResults: [] },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [],
+        toolResults: [],
+        llmProvider,
+        llmModel,
+      },
     ]);
     setInput("");
     setIsStreaming(true);
@@ -324,6 +339,8 @@ function ChatContent() {
         body: JSON.stringify({
           project_id: Number(projectId),
           query: userMessage,
+          provider: llmProvider,
+          model: llmModel,
         }),
         signal: controller.signal,
       });
@@ -683,6 +700,18 @@ function ChatContent() {
 
                   {msg.role === "assistant" && (
                     <div className="space-y-2">
+                      {/* LLM Model Badge */}
+                      {msg.llmProvider && msg.llmModel && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-mono bg-background/50"
+                          >
+                            {msg.llmProvider}/{msg.llmModel}
+                          </Badge>
+                        </div>
+                      )}
+
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
                         <div className="space-y-1">
                           {msg.toolCalls.map((tool, toolIdx) => (
@@ -768,7 +797,20 @@ function ChatContent() {
 
         <div className="border-t p-4 shrink-0">
           <div className="max-w-4xl mx-auto">
-            <div className="flex gap-2">
+            <div className="flex gap-3">
+              {/* LLM Selector - Left Side */}
+              <div className="w-40 shrink-0">
+                <LLMSelector
+                  apiUrl={API_URL}
+                  token={getToken() || undefined}
+                  onSelectionChange={(selection) => {
+                    setLlmProvider(selection.provider);
+                    setLlmModel(selection.model);
+                  }}
+                />
+              </div>
+
+              {/* Textarea - Center */}
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -784,17 +826,19 @@ function ChatContent() {
                     sendMessage();
                   }
                 }}
+                className="flex-1"
               />
 
+              {/* Send Button - Right Side */}
               <Button
                 size="icon"
-                className="h-[60px] w-[60px]"
+                className="h-10 w-10 shrink-0"
                 onClick={isStreaming ? () => abortControllerRef.current?.abort() : sendMessage}
               >
                 {isStreaming ? (
-                  <StopCircle className="h-5 w-5" />
+                  <StopCircle className="h-4 w-4" />
                 ) : (
-                  <Send className="h-5 w-5" />
+                  <Send className="h-4 w-4" />
                 )}
               </Button>
             </div>

@@ -26,25 +26,36 @@ Full-stack AI application combining Next.js frontend with FastAPI backend. The a
    - `FileContent`: Document chunks with embeddings (1024-dimensional vectors)
    - Relationships: User → Projects → FileContents
 
-2. **RAG Agent** (`app/agents/rag.py`):
+2. **LLM Provider System** (`app/services/llm/`):
+   - Factory pattern for managing multiple LLM providers
+   - Supports Ollama, OpenAI, and Serpro providers
+   - Configurable via environment variables
+   - User can select provider and model at runtime
+   - See `app/services/llm/README.md` for detailed documentation
+
+3. **RAG Agent** (`app/agents/rag.py`):
    - Uses LangChain's `create_agent` with tool-based architecture
    - `search_project_documents` tool for semantic search
    - Streams responses with tool calls and results
-   - Integrates with ChatOllama (model: "gpt-oss:120b-cloud")
+   - **Dynamic LLM selection**: Accepts any LangChain Runnable LLM
    - Uses `ProjectContext` to maintain project and session state
+   - Created via `create_rag_agent(llm)` factory function
 
-3. **Services Layer**:
+4. **Services Layer**:
    - `PDFProcessingService`: Extracts and chunks PDF content using pymupdf4llm
    - `FileContentService`: Handles embeddings and similarity search
    - `EmbeddingService`: Generates embeddings using sentence-transformers
+   - `LLMFactory`: Manages LLM provider instantiation and model selection
 
-4. **Routers** (`app/routers/`):
+5. **Routers** (`app/routers/`):
    - `auth.py`: Login, token generation
    - `users.py`: User CRUD operations
    - `projects.py`: Project management
    - `chat.py`: PDF upload, file management, streaming chat with RAG agent
+     - `GET /chat/providers`: List available LLM providers and models
+     - `POST /chat/stream`: Stream chat responses with model selection
 
-5. **Database Connection**:
+6. **Database Connection**:
    - Async engine created from `Settings().DATABASE_URL`
    - Session management via `get_session()` dependency
 
@@ -191,31 +202,58 @@ npx shadcn@latest add [component-name]
 ### Environment Variables
 
 Required in `backend/.env`:
-```
+```bash
+# Database
 DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/dbname
+
+# JWT Authentication
 SECRET_KEY=your-secret-key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# LLM Providers
+OLLAMA_BASE_URL=http://localhost:11434
+OPENAI_API_KEY=sk-...
+SERPRO_USERNAME=your-username
+SERPRO_PASSWORD=your-password
+SERPRO_TOKEN_URL=https://e-api-serprollm.ni.estaleiro.serpro.gov.br/oauth2/token
+SERPRO_API_BASE_URL=https://e-api-serprollm.ni.estaleiro.serpro.gov.br/gateway/v1
+
+# Default LLM Configuration
+DEFAULT_LLM_PROVIDER=ollama
+DEFAULT_LLM_MODEL=gpt-oss:120b-cloud
 ```
 
 ## Key Implementation Details
 
-1. **Vector Search:**
+1. **LLM Provider System:**
+   - **Factory Pattern**: `LLMFactory` manages all providers
+   - **Provider Interface**: All providers implement `LLMProvider` abstract base class
+   - **Runtime Selection**: Users can choose provider and model for each chat request
+   - **Environment Configuration**: All credentials stored in `.env` file
+   - **Available Providers**:
+     - Ollama: Local models (mistral, llama2, codellama, gpt-oss:120b-cloud)
+     - OpenAI: Cloud models (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
+     - Serpro: Government models (gpt-oss-120b, deepseek-r1-distill-qwen-14b)
+   - **Adding Providers**: See `app/services/llm/README.md` for instructions
+
+2. **Vector Search:**
    - Uses pgvector extension for PostgreSQL
    - Embeddings: 1024-dimensional vectors (sentence-transformers)
    - Similarity search via cosine distance in SQL
 
-2. **PDF Processing:**
+3. **PDF Processing:**
    - Files processed in-memory (not stored permanently)
    - Chunks extracted with metadata (filename, page, etc.)
    - Each chunk gets embedded and stored in `file_contents` table
 
-3. **Agent Tool System:**
+4. **Agent Tool System:**
    - Tools receive `ToolRuntime[ProjectContext]` with project_id and session
    - Tools must be async functions
    - Tool results automatically sent back to agent for final response
+   - Agent created dynamically with `create_rag_agent(llm)` function
 
-4. **CORS Configuration:**
+5. **CORS Configuration:**
    - Backend allows all origins (`allow_origins=["*"]`)
    - Configure appropriately for production deployments
 
