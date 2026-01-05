@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ''
 
     # Serpro
-    SERPRO_USERNAME: str = 'SgBIvMn20FNNhY5S7DlVfF72TOwa'
-    SERPRO_PASSWORD: str = 'FDi5SCpz9iVZ6yd33NVm2SC2SCAa'
+    SERPRO_USERNAME: str = ''
+    SERPRO_PASSWORD: str = ''
     SERPRO_TOKEN_URL: str = (
         'https://e-api-serprollm.ni.estaleiro.serpro.gov.br/oauth2/token'
     )
