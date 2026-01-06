@@ -58,6 +58,12 @@ class Project:
         cascade='all, delete-orphan',
         lazy='selectin',
     )
+    conversations: Mapped[list['Conversation']] = relationship(
+        init=False,
+        back_populates='project',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+    )
 
 
 @table_registry.mapped_as_dataclass
@@ -76,4 +82,22 @@ class FileContent:
     )
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
+    )
+
+
+@table_registry.mapped_as_dataclass
+class Conversation:
+    __tablename__ = 'conversations'
+
+    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey('projects.id'))
+    title: Mapped[str] = mapped_column(default='New Conversation')
+    created_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        init=False, server_default=func.now(), onupdate=func.now()
+    )
+    project: Mapped['Project'] = relationship(
+        init=False, back_populates='conversations'
     )

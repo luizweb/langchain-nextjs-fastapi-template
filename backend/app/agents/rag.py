@@ -6,6 +6,7 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain.tools import ToolRuntime, tool
 from langchain_core.runnables import Runnable
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from app.services.file_content_service import FileContentService
 
@@ -59,23 +60,29 @@ USE a ferramenta search_project_documents
 - Se o usuário fizer perguntas gerais (matemática, conhecimento geral,
 conversação), responda diretamente SEM usar ferramentas
 - Seja claro, conciso e útil em suas respostas
+- Mantenha o contexto da conversa para fornecer respostas coerentes
 """
 
 
-def create_rag_agent(llm: Runnable):
-    """Create a RAG agent with the specified LLM.
+def create_rag_agent(
+    llm: Runnable,
+    checkpointer: AsyncPostgresSaver | None = None
+):
+    """Create a RAG agent with the specified LLM and optional checkpointer.
 
     Args:
         llm: A LangChain Runnable LLM instance
+        checkpointer: Optional AsyncPostgresSaver for conversation memory
 
     Returns:
-        A configured RAG agent
+        A configured RAG agent with memory support
     """
     return create_agent(
         model=llm,
         tools=[search_project_documents],
         context_schema=ProjectContext,
-        system_prompt=SYSTEM_PROMPT
+        system_prompt=SYSTEM_PROMPT,
+        checkpointer=checkpointer,
     )
 
 

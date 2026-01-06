@@ -86,7 +86,21 @@ def run_migrations_offline() -> None:
 #             context.run_migrations()
 
 def do_run_migrations(connection):  # <---
-    context.configure(connection=connection, target_metadata=target_metadata)
+    def include_object(object, name, type_, reflected, compare_to):
+        """Exclude LangGraph checkpointer tables from Alembic."""
+        if type_ == "table" and name in (
+            "checkpoint",
+            "checkpoint_writes",
+            "checkpoint_blobs"
+        ):
+            return False
+        return True
+
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object
+    )
 
     with context.begin_transaction():
         context.run_migrations()

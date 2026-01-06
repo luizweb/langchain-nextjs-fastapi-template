@@ -81,6 +81,10 @@ class ChatRequest(BaseModel):
         ...,
         description='ID do projeto para buscar documentos'
     )
+    conversation_id: int | None = Field(
+        None,
+        description='Optional conversation ID to resume existing chat'
+    )
     provider: str = Field(
         'ollama',
         description='LLM provider (ollama, openai, serpro)'
@@ -109,3 +113,30 @@ class LLMProvidersResponse(BaseModel):
 #     answer: str = Field(..., description="Resposta do agente RAG")
 #     query: str = Field(..., description="Query original")
 #     project_id: int = Field(..., description="ID do projeto")
+
+
+# Conversation Schemas
+class ConversationCreate(BaseModel):
+    """Schema for creating conversation."""
+    title: str | None = Field(None, description='Optional title')
+
+
+class ConversationPublic(BaseModel):
+    """Schema for conversation response."""
+    id: int
+    project_id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationList(BaseModel):
+    """Schema for listing conversations."""
+    conversations: list[ConversationPublic]
+    total: int
+
+
+class ConversationUpdate(BaseModel):
+    """Schema for updating conversation."""
+    title: str = Field(..., description='New title')

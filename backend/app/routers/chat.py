@@ -8,21 +8,29 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse  # texto incremental
 from langchain_core.messages import ToolMessage
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.rag import ProjectContext, create_rag_agent
-from app.database import get_session
-from app.models import FileContent, Project, User
+from app.database import get_checkpointer, get_session
+from app.models import Conversation, FileContent, Project, User
 from app.schemas import (
     ChatRequest,
+    ConversationCreate,
+    ConversationList,
+    ConversationPublic,
+    ConversationUpdate,
     FileContentPublic,
     FilesList,
     LLMProviderInfo,
     LLMProvidersResponse,
 )
 from app.security import get_current_user
-from app.services import FileContentService, PDFProcessingService
+from app.services import (
+    ConversationService,
+    FileContentService,
+    PDFProcessingService,
+)
 from app.services.llm import LLMFactory
 from app.settings import Settings
 
@@ -278,7 +286,7 @@ async def chat_with_documents_stream(
     session: Session,
     current_user: CurrentUser,
 ):
-    # 1. Verifica se o projeto pertence ao usuário
+    # 1. Verify project ownership
     project = await session.scalar(
         select(Project).where(
             Project.id == request.project_id,
@@ -288,7 +296,38 @@ async def chat_with_documents_stream(
     if not project:
         raise HTTPException(status_code=404, detail='Projeto não encontrado')
 
-    # 2. Get LLM model from factory
+    # 2. Handle conversation (new or existing)
+    conversation: Conversation
+    if request.conversation_id:
+        # Resume existing conversation
+        conversation = await ConversationService.get_conversation(
+            request.conversation_id, session
+        )
+        if not conversation:
+            raise HTTPException(404, 'Conversation not found')
+
+        # Verify conversation belongs to this project
+        if conversation.project_id != request.project_id:
+            raise HTTPException(
+                403,
+                'Conversation does not belong to this project'
+            )
+    else:
+        # Create new conversation with auto-generated title
+        title = await ConversationService.generate_title_from_message(
+            request.query
+        )
+        conversation = await ConversationService.create_conversation(
+            project_id=request.project_id,
+            session=session,
+            title=title
+        )
+        await session.commit()
+
+    # 3. Get thread_id from conversation
+    thread_id = ConversationService.get_thread_id(conversation.id)
+
+    # 4. Get LLM model from factory
     factory = LLMFactory()
     llm = factory.get_model(request.provider, request.model)
     if not llm:
@@ -297,10 +336,11 @@ async def chat_with_documents_stream(
             detail=f'Provider "{request.provider}" not found'
         )
 
-    # 3. Create RAG agent with selected LLM
-    agent = create_rag_agent(llm)
+    # 5. Get checkpointer and create RAG agent with memory
+    checkpointer = get_checkpointer()
+    agent = create_rag_agent(llm, checkpointer=checkpointer)
 
-    # 4. Contexto do agente
+    # 6. Project context
     context = ProjectContext(
         project_id=request.project_id,
         session=session
@@ -311,6 +351,7 @@ async def chat_with_documents_stream(
             # Track which tool calls have been sent to avoid duplicates
             sent_tool_call_ids = set()
 
+            # Stream with thread_id for memory
             async for token, metadata in agent.astream(
                 {
                     "messages": [
@@ -319,6 +360,11 @@ async def chat_with_documents_stream(
                 },
                 context=context,
                 stream_mode="messages",
+                config={
+                    "configurable": {
+                        "thread_id": thread_id
+                    }
+                }
             ):
 
                 # 1️⃣ Tool call (modelo requisitando ferramenta)
@@ -334,7 +380,7 @@ async def chat_with_documents_stream(
                                 "tool_id": tool_id,
                                 "args": tool_call.get("args", {})
                             }
-                            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+                            yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"  # noqa: E501
 
                 # 2️⃣ Tool result (retorno da ferramenta)
                 elif isinstance(token, ToolMessage):
@@ -361,8 +407,11 @@ async def chat_with_documents_stream(
                     # ✅ AQUI está o yield que faltava!
                     yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-            # Sinal de conclusão
-            data = {"type": "done"}
+            # Done signal with conversation_id
+            data = {
+                "type": "done",
+                "conversation_id": conversation.id
+            }
             yield f"data: {json.dumps(data)}\n\n"
 
         # except Exception as exc:
@@ -376,11 +425,153 @@ async def chat_with_documents_stream(
 
     return StreamingResponse(
         event_generator(),
-        # media_type="text/plain; charset=utf-8"
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Conversation-ID": str(conversation.id),
         }
     )
+
+
+# ==========================================
+# Conversation Management Endpoints
+# ==========================================
+
+@router.get('/conversations/{project_id}', response_model=ConversationList)
+async def list_conversations(
+    project_id: int,
+    session: Session,
+    current_user: CurrentUser,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List all conversations for a project."""
+    # Verify project ownership
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(404, 'Project not found')
+
+    conversations = await ConversationService.list_conversations(
+        project_id, session, limit, offset
+    )
+
+    total = await session.scalar(
+        select(func.count(Conversation.id)).where(
+            Conversation.project_id == project_id
+        )
+    )
+
+    return ConversationList(conversations=conversations, total=total or 0)
+
+
+@router.post(
+    '/conversations/{project_id}',
+    response_model=ConversationPublic,
+    status_code=201
+)
+async def create_conversation(
+    project_id: int,
+    data: ConversationCreate,
+    session: Session,
+    current_user: CurrentUser,
+):
+    """Create new conversation."""
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(404, 'Project not found')
+
+    title = data.title or 'New Conversation'
+    conversation = await ConversationService.create_conversation(
+        project_id, session, title
+    )
+    await session.commit()
+    return conversation
+
+
+@router.patch(
+    '/conversations/{conversation_id}',
+    response_model=ConversationPublic
+)
+async def update_conversation(
+    conversation_id: int,
+    data: ConversationUpdate,
+    session: Session,
+    current_user: CurrentUser,
+):
+    """Update conversation title."""
+    conversation = await ConversationService.get_conversation(
+        conversation_id, session
+    )
+    if not conversation:
+        raise HTTPException(404, 'Conversation not found')
+
+    # Verify ownership through project
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == conversation.project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(403, 'Not authorized')
+
+    updated = await ConversationService.update_conversation_title(
+        conversation_id, data.title, session
+    )
+    await session.commit()
+    return updated
+
+
+@router.delete('/conversations/{conversation_id}', status_code=204)
+async def delete_conversation(
+    conversation_id: int,
+    session: Session,
+    current_user: CurrentUser,
+):
+    """Delete conversation and checkpoints."""
+    conversation = await ConversationService.get_conversation(
+        conversation_id, session
+    )
+    if not conversation:
+        raise HTTPException(404, 'Conversation not found')
+
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == conversation.project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(403, 'Not authorized')
+
+    thread_id = ConversationService.get_thread_id(conversation_id)
+
+    # Delete conversation
+    await ConversationService.delete_conversation(conversation_id, session)
+
+    # Delete checkpoints (best effort)
+    try:
+        await session.execute(
+            text('DELETE FROM checkpoint WHERE thread_id = :thread_id'),
+            {'thread_id': thread_id}
+        )
+        await session.execute(
+            text('DELETE FROM checkpoint_writes WHERE thread_id = :thread_id'),
+            {'thread_id': thread_id}
+        )
+    except Exception as e:
+        print(f'Warning: Failed to delete checkpoints: {e}')
+
+    await session.commit()

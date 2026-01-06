@@ -1,14 +1,32 @@
+from contextlib import asynccontextmanager
 from http import HTTPStatus
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import initialize_checkpointer, cleanup_checkpointer
 from app.routers import auth, chat, projects, users
 from app.schemas import Message
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager.
+
+    Startup: Initialize checkpointer and create tables
+    Shutdown: Cleanup resources
+    """
+    # Startup
+    await initialize_checkpointer()
+    yield
+    # Shutdown
+    await cleanup_checkpointer()
+
 
 app = FastAPI(
     title='langchain-nextjs-fastapi',
     version='0.0.1',
+    lifespan=lifespan,
     # docs_url='/api/docs',
     # redoc_url='/api/redoc',
     # openapi_url='/api/openapi.json',
