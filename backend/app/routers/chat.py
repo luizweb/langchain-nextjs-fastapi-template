@@ -561,17 +561,126 @@ async def delete_conversation(
     # Delete conversation
     await ConversationService.delete_conversation(conversation_id, session)
 
-    # Delete checkpoints (best effort)
+    # Commit conversation deletion first
+    await session.commit()
+
+    # Delete checkpoints (best effort, separate transaction)
     try:
         await session.execute(
-            text('DELETE FROM checkpoint WHERE thread_id = :thread_id'),
+            text('DELETE FROM checkpoints WHERE thread_id = :thread_id'),
             {'thread_id': thread_id}
         )
         await session.execute(
-            text('DELETE FROM checkpoint_writes WHERE thread_id = :thread_id'),
+            text(
+                'DELETE FROM checkpoint_writes WHERE thread_id = :thread_id'
+            ),
             {'thread_id': thread_id}
         )
-    except Exception as e:
-        print(f'Warning: Failed to delete checkpoints: {e}')
+        await session.commit()
+    except Exception:
+        # Rollback only the checkpoint deletion, not the conversation
+        await session.rollback()
 
-    await session.commit()
+
+def _normalize_message_role(msg) -> str:
+    """
+    Normalize LangChain message types to frontend-friendly roles.
+    """
+    msg_type = None
+
+    if hasattr(msg, 'type'):
+        msg_type = msg.type
+    elif hasattr(msg, '__class__'):
+        msg_type = msg.__class__.__name__.lower()
+
+    if not msg_type:
+        return 'unknown'
+
+    if 'human' in msg_type or 'user' in msg_type:
+        return 'user'
+    if 'ai' in msg_type or 'assistant' in msg_type:
+        return 'assistant'
+    if 'system' in msg_type:
+        return 'system'
+    if 'tool' in msg_type:
+        return 'tool'
+
+    return 'unknown'
+
+
+@router.get(
+    '/conversations/{conversation_id}/history',
+    response_model=dict
+)
+async def get_conversation_history(
+    conversation_id: int,
+    session: Session,
+    current_user: CurrentUser,
+):
+    """
+    Return conversation message history from LangChain checkpoints.
+    """
+
+    # 1 - Load conversation
+    conversation = await ConversationService.get_conversation(
+        conversation_id, session
+    )
+    if not conversation:
+        raise HTTPException(404, 'Conversation not found')
+
+    # 2 - Verify ownership via project
+    project = await session.scalar(
+        select(Project).where(
+            Project.id == conversation.project_id,
+            Project.user_id == current_user.id,
+        )
+    )
+    if not project:
+        raise HTTPException(403, 'Not authorized')
+
+    # 3 - Resolve thread_id
+    thread_id = ConversationService.get_thread_id(conversation.id)
+
+    # 4 - Get checkpointer
+    checkpointer = get_checkpointer()
+
+    # 5 - Fetch history from LangChain
+    try:
+        config = {
+            "configurable": {
+                "thread_id": thread_id
+            }
+        }
+
+        state = await checkpointer.aget_tuple(config)
+
+        messages_out = []
+
+        if state and state.checkpoint:
+            channel_values = state.checkpoint.get(
+                'channel_values', {}
+            )
+            messages = channel_values.get('messages', [])
+
+            for msg in messages:
+                role = _normalize_message_role(msg)
+                content = getattr(msg, 'content', None)
+
+                if content:
+                    messages_out.append(
+                        {
+                            "role": role,
+                            "content": content,
+                        }
+                    )
+
+        return {
+            "conversation_id": conversation.id,
+            "messages": messages_out,
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to load conversation history: {exc}'
+        )

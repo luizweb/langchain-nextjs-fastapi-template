@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText, Trash2, Upload, Send, ArrowLeft, Loader2, CheckCircle, XCircle, StopCircle, Wrench, FileSearch, ChevronDown, ChevronRight } from "lucide-react";
+import { FileText, Trash2, Upload, Send, ArrowLeft, Loader2, CheckCircle, XCircle, StopCircle, Wrench, FileSearch, ChevronDown, ChevronRight, MessageSquare, Plus, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,19 @@ type UploadedFile = {
   filename: string;
   chunks_count: number;
   created_at: string;
+};
+
+type Conversation = {
+  id: number;
+  project_id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ConversationHistory = {
+  conversation_id: number;
+  messages: ChatMessage[];
 };
 
 type ChatMessage = {
@@ -117,6 +131,17 @@ function ChatContent() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Estados de conversas
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [isDraft, setIsDraft] = useState(true); // true = nova conversa sem ID
+  const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [deletingConversationId, setDeletingConversationId] = useState<number | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  const [hoveredConversationId, setHoveredConversationId] = useState<number | null>(null);
+
   // Estados de seleção LLM
   const [llmProvider, setLlmProvider] = useState<string>("ollama");
   const [llmModel, setLlmModel] = useState<string>("gpt-oss:120b-cloud");
@@ -144,6 +169,172 @@ function ChatContent() {
       newSet.has(key) ? newSet.delete(key) : newSet.add(key);
       return newSet;
     });
+  };
+
+  // ===============================
+  // API: Buscar conversas do projeto
+  // ===============================
+  const fetchConversations = async () => {
+    if (!projectId) return;
+
+    try {
+      setConversationsLoading(true);
+      const token = getToken();
+      if (!token) return logout();
+
+      const response = await fetch(`${API_URL}/chat/conversations/${projectId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) throw new Error("Erro ao carregar conversas");
+
+      const data = await response.json();
+      setConversations(data.conversations || []);
+    } catch (err) {
+      console.error("Erro ao buscar conversas:", err);
+      setConversations([]);
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  // ===============================
+  // API: Carregar histórico de conversa
+  // ===============================
+  const loadConversationHistory = async (conversationId: number) => {
+    if (!projectId) return;
+
+    try {
+      const token = getToken();
+      if (!token) return logout();
+
+      const response = await fetch(`${API_URL}/chat/conversations/${conversationId}/history`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) throw new Error("Erro ao carregar histórico");
+
+      const data: ConversationHistory = await response.json();
+      setMessages(data.messages);
+      setCurrentConversationId(conversationId);
+      setIsDraft(false);
+
+      // Update URL to reflect current conversation
+      router.push(`/projects/chat?id=${projectId}&conversation=${conversationId}`);
+    } catch (err) {
+      console.error("Erro ao carregar histórico:", err);
+      showMessage('error', 'Erro ao carregar histórico da conversa');
+    }
+  };
+
+  // ===============================
+  // Função para iniciar nova conversa
+  // ===============================
+  const startNewConversation = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
+    setIsDraft(true);
+    router.push(`/projects/chat?id=${projectId}`);
+  };
+
+  // ===============================
+  // API: Deletar conversa
+  // ===============================
+  const handleDeleteConversation = async () => {
+    if (!conversationToDelete) return;
+
+    try {
+      setDeletingConversationId(conversationToDelete.id);
+      const token = getToken();
+      if (!token) return logout();
+
+      const response = await fetch(`${API_URL}/chat/conversations/${conversationToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) {
+        throw new Error('Erro ao deletar conversa');
+      }
+
+      // Remove da lista local
+      setConversations(prev => prev.filter(c => c.id !== conversationToDelete.id));
+
+      // Se era a conversa ativa, inicia nova conversa
+      if (currentConversationId === conversationToDelete.id) {
+        startNewConversation();
+      }
+
+      showMessage('success', 'Conversa deletada com sucesso!');
+    } catch (err) {
+      console.error('Erro ao deletar conversa:', err);
+      showMessage('error', err instanceof Error ? err.message : 'Erro ao deletar conversa');
+    } finally {
+      setDeletingConversationId(null);
+      setConversationToDelete(null);
+    }
+  };
+
+  // ===============================
+  // API: Renomear conversa
+  // ===============================
+  const handleRenameConversation = async (conversationId: number, newTitle: string) => {
+    if (!newTitle.trim()) {
+      setEditingConversationId(null);
+      setEditingTitle("");
+      return;
+    }
+
+    try {
+      const token = getToken();
+      if (!token) return logout();
+
+      const response = await fetch(`${API_URL}/chat/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: newTitle.trim() }),
+      });
+
+      if (!(await checkAuth(response))) return;
+      if (!response.ok) {
+        throw new Error('Erro ao renomear conversa');
+      }
+
+      const updatedConversation = await response.json();
+
+      // Atualiza na lista local
+      setConversations(prev =>
+        prev.map(c => c.id === conversationId ? updatedConversation : c)
+      );
+
+      setEditingConversationId(null);
+      setEditingTitle("");
+    } catch (err) {
+      console.error('Erro ao renomear conversa:', err);
+      showMessage('error', 'Erro ao renomear conversa');
+    }
+  };
+
+  // ===============================
+  // Função para iniciar edição
+  // ===============================
+  const startEditingConversation = (conversation: Conversation) => {
+    setEditingConversationId(conversation.id);
+    setEditingTitle(conversation.title);
+  };
+
+  // ===============================
+  // Função para cancelar edição
+  // ===============================
+  const cancelEditingConversation = () => {
+    setEditingConversationId(null);
+    setEditingTitle("");
   };
 
   // ===============================
@@ -339,6 +530,7 @@ function ChatContent() {
         body: JSON.stringify({
           project_id: Number(projectId),
           query: userMessage,
+          conversation_id: isDraft ? null : currentConversationId,
           provider: llmProvider,
           model: llmModel,
         }),
@@ -351,6 +543,7 @@ function ChatContent() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
+      let newConversationId: number | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -392,6 +585,12 @@ function ChatContent() {
                   });
                   updateLastMessage();
                   break;
+                case "done":
+                  // Backend retorna conversation_id quando termina o stream
+                  if (data.conversation_id) {
+                    newConversationId = data.conversation_id;
+                  }
+                  break;
                 case "error":
                   accumulatedContent = `❌ Erro: ${data.message}`;
                   updateLastMessage();
@@ -404,6 +603,15 @@ function ChatContent() {
 
           boundary = buffer.indexOf("\n\n");
         }
+      }
+
+      // Se era draft e recebemos um conversation_id, atualizar estado
+      if (isDraft && newConversationId) {
+        setCurrentConversationId(newConversationId);
+        setIsDraft(false);
+        router.push(`/projects/chat?id=${projectId}&conversation=${newConversationId}`);
+        // Atualizar lista de conversas
+        await fetchConversations();
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -455,6 +663,7 @@ function ChatContent() {
         } else {
           setProject(foundProject);
           await fetchProjectFiles();
+          await fetchConversations();
         }
       } catch (err) {
         console.error("Erro ao buscar projeto:", err);
@@ -465,7 +674,30 @@ function ChatContent() {
     };
 
     fetchProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // ===============================
+  // Carregar conversa da URL
+  // ===============================
+  useEffect(() => {
+    const conversationIdFromUrl = searchParams.get("conversation");
+
+    if (conversationIdFromUrl) {
+      const convId = parseInt(conversationIdFromUrl);
+      if (!isNaN(convId) && convId !== currentConversationId) {
+        loadConversationHistory(convId);
+      }
+    } else {
+      // Se não há conversation na URL, iniciar em modo draft
+      if (!isDraft) {
+        setMessages([]);
+        setCurrentConversationId(null);
+        setIsDraft(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     scrollToBottom();
@@ -524,15 +756,155 @@ function ChatContent() {
           </p>
         </div>
 
-        {/* Files List */}
-        <div className="flex-1 p-4 overflow-hidden min-h-0">
-          <h3 className="text-sm font-medium mb-3">Arquivos PDF</h3>
-          <ScrollArea className="h-full">
-            <div className="space-y-2 pr-4">
-              {filesLoading ? (
+        {/* Conversations List */}
+        <div className="flex-1 px-4 py-3 overflow-hidden min-h-0 flex flex-col">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium">Conversas</h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={startNewConversation}
+              className="h-7 w-7 p-0 hover:bg-accent cursor-pointer"
+              title="Nova conversa"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          <ScrollArea className="flex-1 -mr-4 pr-4">
+            <div className="space-y-1">
+              {conversationsLoading ? (
                 <div className="flex items-center justify-center p-4">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                  <span className="text-sm text-muted-foreground">Carregando...</span>
+                  <span className="text-xs text-muted-foreground">Carregando...</span>
+                </div>
+              ) : conversations.length > 0 ? (
+                conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    onMouseEnter={() => setHoveredConversationId(conv.id)}
+                    onMouseLeave={() => setHoveredConversationId(null)}
+                    className={`
+                      rounded-md transition-all duration-200
+                      ${currentConversationId === conv.id
+                        ? 'bg-primary/10 border border-primary/20 shadow-sm'
+                        : 'hover:bg-accent/50 border border-transparent hover:shadow-sm'
+                      }
+                    `}
+                  >
+                    {editingConversationId === conv.id ? (
+                      <div className="flex items-center gap-2 p-3">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <Input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleRenameConversation(conv.id, editingTitle);
+                            } else if (e.key === 'Escape') {
+                              cancelEditingConversation();
+                            }
+                          }}
+                          className="flex-1 h-8 text-sm"
+                          autoFocus
+                          maxLength={100}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 flex-shrink-0 hover:bg-green-100 dark:hover:bg-green-900"
+                          onClick={() => handleRenameConversation(conv.id, editingTitle)}
+                          title="Salvar"
+                        >
+                          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900"
+                          onClick={cancelEditingConversation}
+                          title="Cancelar"
+                        >
+                          <X className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => loadConversationHistory(conv.id)}
+                        className="w-full p-2.5 cursor-pointer group"
+                        title={conv.title}
+                      >
+                        <div className="flex items-center gap-2.5 mb-2">
+                          <MessageSquare className={`h-4 w-4 flex-shrink-0 ${
+                            currentConversationId === conv.id ? 'text-primary' : 'text-muted-foreground'
+                          }`} />
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <p className="text-sm font-medium truncate leading-snug">
+                              {conv.title.length > 28 ? `${conv.title.substring(0, 28)}...` : conv.title}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pl-6">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(conv.updated_at).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </p>
+                          <div className={`flex items-center gap-0.5 transition-opacity duration-200 ${
+                            hoveredConversationId === conv.id ? 'opacity-100' : 'opacity-0'
+                          }`}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 hover:bg-accent"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingConversation(conv);
+                              }}
+                              title="Renomear"
+                            >
+                              <Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 hover:bg-destructive/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConversationToDelete(conv);
+                              }}
+                              title="Deletar"
+                            >
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  Nenhuma conversa ainda.
+                  <br />
+                  Envie uma mensagem para começar!
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Files List */}
+        <div className="p-4 border-t shrink-0 overflow-hidden max-h-64 flex flex-col">
+          <h3 className="text-sm font-medium mb-3">Arquivos PDF</h3>
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 pr-4">
+              {filesLoading ? (
+                <div className="flex items-center justify-center p-2">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground mr-2" />
+                  <span className="text-xs text-muted-foreground">Carregando...</span>
                 </div>
               ) : uploadedFiles.length > 0 ? (
                 uploadedFiles.map((file, index) => (
@@ -541,16 +913,16 @@ function ChatContent() {
                     className="flex items-center justify-between p-2 rounded-md bg-background hover:bg-accent/50 group"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <span className="text-sm truncate block">{file.filename}</span>
+                        <span className="text-xs truncate block">{file.filename}</span>
                         <span className="text-xs text-muted-foreground">{file.chunks_count} chunks</span>
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => setFileToDelete(file.filename)}
                       disabled={deletingFile === file.filename}
                     >
@@ -563,8 +935,8 @@ function ChatContent() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum arquivo enviado ainda
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Nenhum arquivo
                 </p>
               )}
             </div>
@@ -638,7 +1010,7 @@ function ChatContent() {
         </div>
       </aside>
 
-      {/* Diálogo de Confirmação de Exclusão */}
+      {/* Diálogo de Confirmação de Exclusão de Arquivo */}
       {fileToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
           <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
@@ -666,8 +1038,56 @@ function ChatContent() {
         </div>
       )}
 
+      {/* Diálogo de Confirmação de Exclusão de Conversa */}
+      {conversationToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
+          <div className="bg-background border rounded-lg p-6 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold mb-2">Deletar conversa</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Tem certeza que deseja deletar a conversa{' '}
+              <span className="font-medium text-foreground">"{conversationToDelete.title}"</span>?
+              <br />
+              <br />
+              Todo o histórico de mensagens será perdido. Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setConversationToDelete(null)}
+                disabled={!!deletingConversationId}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConversation}
+                disabled={!!deletingConversationId}
+              >
+                {deletingConversationId ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deletando...
+                  </>
+                ) : (
+                  'Deletar conversa'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Chat Area */}
       <main className="flex-1 flex flex-col h-full">
+        {/* Chat Header */}
+        {isDraft && messages.length === 0 && (
+          <div className="border-b bg-muted/20 px-4 py-2">
+            <p className="text-xs text-muted-foreground text-center">
+              💬 Nova conversa • A conversa será salva automaticamente após a primeira mensagem
+            </p>
+          </div>
+        )}
+
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="max-w-4xl mx-auto space-y-4 p-4">

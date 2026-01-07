@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Conversation
 
+# Maximum length for auto-generated conversation titles
+MAX_TITLE_LENGTH = 50
+
 
 class ConversationService:
     """Service for managing conversations."""
@@ -122,6 +125,7 @@ class ConversationService:
         result = await session.execute(
             delete(Conversation).where(Conversation.id == conversation_id)
         )
+        await session.flush()
         return result.rowcount > 0
 
     @staticmethod
@@ -138,15 +142,15 @@ class ConversationService:
 
     @staticmethod
     async def generate_title_from_message(message: str) -> str:
-        """Generate title from first message (max 50 chars).
+        """Generate title from first message.
 
         Args:
             message: The user's first message
 
         Returns:
-            A truncated title
+            A truncated title (max MAX_TITLE_LENGTH chars)
         """
         title = message.strip()
-        if len(title) > 50:
-            title = title[:47] + '...'
+        if len(title) > MAX_TITLE_LENGTH:
+            title = title[:MAX_TITLE_LENGTH - 3] + '...'
         return title if title else 'New Conversation'
