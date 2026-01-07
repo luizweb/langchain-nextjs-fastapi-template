@@ -23,6 +23,7 @@ dependencies = [
     "sentence-transformers>=5.2.0",
     "sqlalchemy[asyncio]>=2.0.41",
     "langchain-ollama>=1.0.1",
+    "langgraph-checkpoint-postgres>=3.0.2",
 ]
 
 [dependency-groups]
