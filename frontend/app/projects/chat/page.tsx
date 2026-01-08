@@ -1219,7 +1219,7 @@ function ChatContent() {
           <div className="max-w-4xl mx-auto">
             <div className="flex gap-3">
               {/* LLM Selector - Left Side */}
-              <div className="w-40 shrink-0">
+              <div className="max-w-[220px] w-full shrink-0">
                 <LLMSelector
                   apiUrl={API_URL}
                   token={getToken() || undefined}
@@ -1246,7 +1246,7 @@ function ChatContent() {
                     sendMessage();
                   }
                 }}
-                className="flex-1"
+                className="flex-1 min-w-[260px]"
               />
 
               {/* Send Button - Right Side */}

@@ -469,7 +469,7 @@ export default function ProjectsPage() {
 
       {/* Projects grid */}
       {!isLoading && !error && projects.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {projects.map((project) => (
             <Link href={`/projects/chat?id=${project.id}`} key={project.id}>
             <Card className="py-4 cursor-pointer hover:shadow-md transition-shadow">

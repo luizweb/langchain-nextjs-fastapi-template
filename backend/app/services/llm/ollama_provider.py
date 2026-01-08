@@ -43,5 +43,6 @@ class OllamaProvider(LLMProvider):
             List of supported Ollama model names
         """
         return [
-            'gpt-oss:20b',
+            'gpt-oss:120b-cloud',
+            'mistral',
         ]
