@@ -4,7 +4,7 @@ from http import HTTPStatus
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import initialize_checkpointer, cleanup_checkpointer
+from app.database import cleanup_checkpointer, initialize_checkpointer
 from app.routers import auth, chat, projects, users
 from app.schemas import Message
 
@@ -27,8 +27,8 @@ app = FastAPI(
     title='langchain-nextjs-fastapi',
     version='0.0.1',
     lifespan=lifespan,
-    # docs_url='/api/docs',
-    # redoc_url='/api/redoc',
+    docs_url='/api/docs',
+    redoc_url='/api/redoc',
     # openapi_url='/api/openapi.json',
 )
 

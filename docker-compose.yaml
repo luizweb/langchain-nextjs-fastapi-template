@@ -37,6 +37,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
     volumes:
       - ./backend:/app
+      - /app/.venv
     networks:
       - app-network
 
@@ -45,17 +46,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: langchain-nextjs-fastapi_frontend
     ports:
       - '3000:3000'
-    depends_on:
-      - backend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     networks:
       - app-network
 

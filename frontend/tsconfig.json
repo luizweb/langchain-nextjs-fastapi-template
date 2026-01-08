@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-  ],
+, "app/layout.tsx", "app/password-recovery/page.OLD", "next.config.mjs"  ],
   "exclude": ["node_modules"]
 }

@@ -83,7 +83,7 @@ export default function Page() {
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <div className="flex h-full w-full items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm">
         <Card className="w-full rounded-lg shadow-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800">
           <CardHeader className="pb-2">

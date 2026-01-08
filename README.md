@@ -4,3 +4,4 @@
 - $ cd /backend
 - ativar ambiente virtual do backend
 - $ task run
+

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Bot, LogIn, LogOut, ShieldUser, User, UserPlus, FolderOpen } from "lucide-react";
+import Image from "next/image";
 
 // ===============================
 // Tipo para os dados do usuário extraídos do token JWT
@@ -115,10 +116,19 @@ export function Header() {
       <header className="border-b bg-background">
         <div className="flex h-14 items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded bg-primary flex items-center justify-center">
+            {/* <div className="h-8 w-8 rounded bg-primary flex items-center justify-center">
               <Bot className="h-5 w-5 text-green-foreground" />
+            </div> */}
+            <div className="relative h-16 w-30">
+              <Image
+                src="/images/logo-receita-federal.png"
+                alt="Logo ChatNext"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
-            <span className="font-semibold text-lg">ChatNext</span>
+            <span className="font-semibold text-md text-[#0F4098]">Labin Studio</span>
           </Link>
         </div>
       </header>
@@ -127,29 +137,34 @@ export function Header() {
 
   return (
     <header className="border-b bg-background">
-      <div className="flex h-14 items-center justify-between px-6">
+      <div className="flex h-16 items-center justify-between px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded bg-green-800 flex items-center justify-center">
-            <Bot className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-lg">ChatNext</span>
+          {/* <div className="h-8 w-8 rounded bg-primary flex items-center justify-center">
+              <Bot className="h-5 w-5 text-green-foreground" />
+            </div> */}
+            <div className="relative h-16 w-30">
+              <Image
+                src="/images/logo-receita-federal.png"
+                alt="Logo ChatNext"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          <span className="font-semibold text-md text-[#0F4098]">Labin Studio</span>
         </Link>
 
         {/* Right side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center">
           {isLoggedIn && user ? (
             <>
-              {/* User name */}
-              <Link href="/profile" className="flex items-center gap-2 text-sm hover:text-primary transition-colors">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span>{user.username}</span>
-              </Link>
-
+              
+              
               {/* Projects link */}
               <Link href="/projects">
                 <Button variant="ghost" size="icon" title="Meus Projetos" className="cursor-pointer">
-                  <FolderOpen className="h-4 w-4 text-green-700" />
+                  <FolderOpen className="h-5 w-5 text-[#0F4098]" />
                 </Button>
               </Link>
 
@@ -157,27 +172,33 @@ export function Header() {
               {user.is_admin && (
                 <Link href="/admin/users">
                   <Button variant="ghost" size="icon" title="Área Administrativa" className="cursor-pointer">
-                    <ShieldUser className="h-4 w-4 text-amber-700" />
+                    <ShieldUser className="h-5 w-5 text-[#0F4098]" />
                   </Button>
                 </Link>
               )}
 
               {/* Logout */}
               <Button variant="ghost" size="icon" title="Sair" onClick={handleLogout} className="cursor-pointer">
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-5 w-5 text-[#0F4098]" />
               </Button>
+
+              {/* User name */}
+              <Link href="/profile" className="flex items-center gap-2 text-sm hover:text-primary transition-colors ml-6">
+                <User className="h-5 w-5 text-[#0F4098]" />
+                <span>{user.username}</span>
+              </Link>
             </>
           ) : (
             <>
               <Link href="/register">
                 <Button variant="ghost" size="sm" className="cursor-pointer">
-                  <UserPlus className="h-4 w-4 mr-2" />
+                  <UserPlus className="h-5 w-5 mr-1 text-[#0F4098]" />
                   Cadastrar
                 </Button>
               </Link>
               <Link href="/login">
                 <Button variant="ghost" size="sm" className="cursor-pointer">
-                  <LogIn className="h-4 w-4 mr-2" />
+                  <LogIn className="h-5 w-5 mr-1 text-[#0F4098]" />
                   Entrar
                 </Button>
               </Link>

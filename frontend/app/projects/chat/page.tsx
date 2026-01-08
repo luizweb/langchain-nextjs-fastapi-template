@@ -840,7 +840,7 @@ function ChatContent() {
                           }`} />
                           <div className="min-w-0 flex-1 overflow-hidden">
                             <p className="text-sm font-medium truncate leading-snug">
-                              {conv.title.length > 28 ? `${conv.title.substring(0, 28)}...` : conv.title}
+                              {conv.title.length > 28 ? `${conv.title.substring(0, 23)}...` : conv.title}
                             </p>
                           </div>
                         </div>
@@ -915,7 +915,7 @@ function ChatContent() {
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <span className="text-xs truncate block">{file.filename}</span>
+                        <span className="text-xs truncate block" title={file.filename}>{file.filename.slice(0, 23)}</span>
                         <span className="text-xs text-muted-foreground">{file.chunks_count} chunks</span>
                       </div>
                     </div>
