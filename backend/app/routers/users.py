@@ -116,12 +116,22 @@ async def delete_user(
     session: Session,
     current_user: CurrentUser,
 ):
-    if current_user.id != user_id:
+    if current_user.id != user_id and not current_user.is_admin:
         raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail='Not enough permissions'
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Not enough permissions'
         )
 
-    await session.delete(current_user)
+    if current_user.id != user_id:
+        user_to_delete = await session.get(User, user_id)
+        if not user_to_delete:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail='User not found'
+            )
+        await session.delete(user_to_delete)
+    else:
+        await session.delete(current_user)
     await session.commit()
 
     return {'message': 'User deleted'}

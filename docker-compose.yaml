@@ -36,8 +36,8 @@ services:
       ALGORITHM: 'HS256'
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
     volumes:
-      - ./backend:/app
-      - /app/.venv
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
     networks:
       - app-network
 
@@ -46,6 +46,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: langchain-nextjs-fastapi_frontend
     ports:
       - '3000:3000'
     environment:

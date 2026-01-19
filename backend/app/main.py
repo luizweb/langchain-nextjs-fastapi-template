@@ -27,8 +27,8 @@ app = FastAPI(
     title='langchain-nextjs-fastapi',
     version='0.0.1',
     lifespan=lifespan,
-    docs_url='/api/docs',
-    redoc_url='/api/redoc',
+    # docs_url='/api/docs',
+    # redoc_url='/api/redoc',
     # openapi_url='/api/openapi.json',
 )
 

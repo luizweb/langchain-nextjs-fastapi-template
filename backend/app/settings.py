@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # LLM Providers
     # Ollama
-    OLLAMA_BASE_URL: str = 'http://10.68.100.40:8000/'
+    OLLAMA_BASE_URL: str = 'http://localhost:11434'
 
     # OpenAI
     OPENAI_API_KEY: str = ''

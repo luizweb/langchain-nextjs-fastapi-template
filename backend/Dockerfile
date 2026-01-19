@@ -11,20 +11,19 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copiar arquivos de dependências primeiro
 COPY pyproject.toml uv.lock* ./
 
-# Adicione esta linha:
 ENV UV_LINK_MODE=copy
 
 # Instalar dependências
-RUN uv sync --frozen --no-dev --no-cache
+RUN uv sync --frozen --no-dev
 
 # Copiar entrypoint
-COPY ./entrypoint.sh /usr/src/app/entrypoint.sh
-RUN chmod +x /usr/src/app/entrypoint.sh
+COPY ./entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-# Copiar o resto do código
+# Copiar o restante do código
 COPY . .
 
 EXPOSE 8000
 
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+ENTRYPOINT ["bash", "/app/entrypoint.sh"]
 CMD ["uv", "run", "uvicorn", "--host", "0.0.0.0", "app.main:app"]
