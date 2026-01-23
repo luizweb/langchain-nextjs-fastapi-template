@@ -1,6 +1,8 @@
 from typing import List
 
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_ollama import OllamaEmbeddings
+
+from app.settings import Settings
 
 
 class EmbeddingService:
@@ -9,13 +11,13 @@ class EmbeddingService:
     _model = None
 
     @classmethod
-    def get_model(cls) -> HuggingFaceEmbeddings:
+    def get_model(cls) -> OllamaEmbeddings:
         """Get or create singleton embedding model."""
         if cls._model is None:
-            cls._model = HuggingFaceEmbeddings(
-                model_name="BAAI/bge-m3",
-                model_kwargs={"device": "cpu"},
-                encode_kwargs={"normalize_embeddings": False}
+            settings = Settings()
+            cls._model = OllamaEmbeddings(
+                model='bge-m3',
+                base_url=settings.OLLAMA_BASE_URL
             )
         return cls._model
 

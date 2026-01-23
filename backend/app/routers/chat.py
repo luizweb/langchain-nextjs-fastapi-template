@@ -11,7 +11,7 @@ from langchain_core.messages import ToolMessage
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.rag import ProjectContext, create_rag_agent
+from app.agents.rag_hybrid import ProjectContext, create_rag_hybrid_agent
 from app.database import get_checkpointer, get_session
 from app.models import Conversation, FileContent, Project, User
 from app.schemas import (
@@ -336,9 +336,14 @@ async def chat_with_documents_stream(
             detail=f'Provider "{request.provider}" not found'
         )
 
-    # 5. Get checkpointer and create RAG agent with memory
+    # 5. Get checkpointer and create RAG hybrid agent with memory
     checkpointer = get_checkpointer()
-    agent = create_rag_agent(llm, checkpointer=checkpointer)
+    grader_model = factory.get_model('ollama', 'llama3.1')
+    agent = create_rag_hybrid_agent(
+        llm,
+        checkpointer=checkpointer,
+        grader_model=grader_model
+    )
 
     # 6. Project context
     context = ProjectContext(
@@ -350,6 +355,13 @@ async def chat_with_documents_stream(
         try:
             # Track which tool calls have been sent to avoid duplicates
             sent_tool_call_ids = set()
+
+            # Nodes that should produce visible output to the user
+            visible_nodes = {
+                'generate_query_or_respond',
+                'generate_answer',
+                'retrieve',
+            }
 
             # Stream with thread_id for memory
             async for token, metadata in agent.astream(
@@ -366,8 +378,14 @@ async def chat_with_documents_stream(
                     }
                 }
             ):
+                # Get the node that produced this message
+                node_name = metadata.get('langgraph_node', '')
 
-                # 1️⃣ Tool call (modelo requisitando ferramenta)
+                # Only allow messages from explicit visible nodes
+                if node_name not in visible_nodes:
+                    continue
+
+                # 1. Tool call (modelo requisitando ferramenta)
                 if getattr(token, "tool_calls", None):
                     for tool_call in token.tool_calls:
                         tool_id = tool_call.get("id")
@@ -382,14 +400,8 @@ async def chat_with_documents_stream(
                             }
                             yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"  # noqa: E501
 
-                # 2️⃣ Tool result (retorno da ferramenta)
+                # 2. Tool result (retorno da ferramenta)
                 elif isinstance(token, ToolMessage):
-                    # tool_results[token.tool_call_id] = {
-                    #     "tool_name": token.name,
-                    #     "content": token.content,
-                    # }
-                    # # ❌ não printa
-                    # continue
                     data = {
                         "type": "tool_result",
                         "tool_name": token.name,
@@ -397,14 +409,12 @@ async def chat_with_documents_stream(
                     }
                     yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-                # 3️⃣ Texto normal do modelo
+                # 3. Texto normal do modelo
                 elif token.content:
-                    # print(token.content, end="", flush=True)
                     data = {
                         "type": "token",
                         "content": token.content
                     }
-                    # ✅ AQUI está o yield que faltava!
                     yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
             # Done signal with conversation_id

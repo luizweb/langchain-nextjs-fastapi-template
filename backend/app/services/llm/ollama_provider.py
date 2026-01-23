@@ -44,5 +44,5 @@ class OllamaProvider(LLMProvider):
         """
         return [
             'gpt-oss:120b-cloud',
-            'mistral',
+            'llama3.1'
         ]
