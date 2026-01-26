@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { API_URL } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Bot, LogIn, LogOut, ShieldUser, User, UserPlus, FolderOpen } from "lucide-react";
 import Image from "next/image";
@@ -46,7 +47,7 @@ export function Header() {
         
         if (token) {
           // Busca os dados completos do usuário via API
-          const response = await fetch("http://localhost:8000/users/me", {
+          const response = await fetch(`${API_URL}/users/me`, {
             headers: {
               "Authorization": `Bearer ${token}`,
             },

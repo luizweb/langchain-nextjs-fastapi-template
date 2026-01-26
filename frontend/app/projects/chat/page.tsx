@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { API_URL } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +68,6 @@ type ToolResult = {
 // ===============================
 // Constantes
 // ===============================
-const API_URL = "http://localhost:8000";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 // ===============================
@@ -758,7 +758,7 @@ function ChatContent() {
 
         {/* Conversations List */}
         <div className="flex-1 px-4 py-3 overflow-hidden min-h-0 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 shrink-0">
             <h3 className="text-sm font-medium">Conversas</h3>
             <Button
               size="sm"
@@ -770,7 +770,7 @@ function ChatContent() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <ScrollArea className="flex-1 -mr-4 pr-4">
+          <ScrollArea className="flex-1 h-0 -mr-4 pr-4">
             <div className="space-y-1">
               {conversationsLoading ? (
                 <div className="flex items-center justify-center p-4">
@@ -897,9 +897,9 @@ function ChatContent() {
         </div>
 
         {/* Files List */}
-        <div className="p-4 border-t shrink-0 overflow-hidden max-h-64 flex flex-col">
-          <h3 className="text-sm font-medium mb-3">Arquivos PDF</h3>
-          <ScrollArea className="flex-1">
+        <div className="p-4 border-t overflow-hidden max-h-48 flex flex-col min-h-0">
+          <h3 className="text-sm font-medium mb-3 shrink-0">Arquivos PDF</h3>
+          <ScrollArea className="flex-1 h-0">
             <div className="space-y-2 pr-4">
               {filesLoading ? (
                 <div className="flex items-center justify-center p-2">
@@ -960,34 +960,33 @@ function ChatContent() {
             onDrop={handleDrop}
             onClick={() => !isUploading && fileInputRef.current?.click()}
             className={`
-              relative border-2 border-dashed rounded-lg p-4 transition-all cursor-pointer
+              relative border-2 border-dashed rounded-lg p-2.5 transition-all cursor-pointer
               ${isDragging ? 'border-primary bg-primary/5 scale-[1.02]' : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-accent/50'}
               ${isUploading ? 'cursor-not-allowed opacity-60' : ''}
             `}
           >
-            <div className="flex flex-col items-center gap-2 text-center pointer-events-none">
+            <div className="flex items-center gap-3 pointer-events-none">
               {isUploading ? (
                 <>
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <div className="w-full space-y-1">
-                    <p className="text-xs font-medium">Enviando arquivo...</p>
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-primary" />
+                  <div className="flex-1 space-y-1">
+                    <p className="text-xs font-medium">Enviando... {uploadProgress}%</p>
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                       <div
                         className="h-full bg-primary transition-all duration-300 ease-out"
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">{uploadProgress}%</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <Upload className={`h-6 w-6 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <div>
-                    <p className="text-sm font-medium">
+                  <Upload className={`h-5 w-5 flex-shrink-0 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <div className="text-left">
+                    <p className="text-xs font-medium">
                       {isDragging ? 'Solte o arquivo aqui' : 'Clique ou arraste um PDF'}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">Máximo 10MB</p>
+                    <p className="text-xs text-muted-foreground">Máximo 10MB</p>
                   </div>
                 </>
               )}

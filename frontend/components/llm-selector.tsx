@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_URL } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -61,7 +62,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 // ===============================
 // Component
 // ===============================
-export function LLMSelector({ onSelectionChange, apiUrl = "http://localhost:8000", token }: LLMSelectorProps) {
+export function LLMSelector({ onSelectionChange, apiUrl = API_URL, token }: LLMSelectorProps) {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<string>("");

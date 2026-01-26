@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,7 +74,7 @@ export default function ProfilePage() {
         }
         
         // Busca os dados do usuário logado via API
-        const response = await fetch("http://localhost:8000/users/me", {
+        const response = await fetch(`${API_URL}/users/me`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -142,7 +143,7 @@ export default function ProfilePage() {
         is_admin: false, // Mantém o valor atual ou define como false
       };
       
-      const response = await fetch(`http://localhost:8000/users/${userId}`, {
+      const response = await fetch(`${API_URL}/users/${userId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -193,7 +194,7 @@ export default function ProfilePage() {
       
       const token = localStorage.getItem("access_token");
       
-      const response = await fetch(`http://localhost:8000/users/${userId}`, {
+      const response = await fetch(`${API_URL}/users/${userId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,

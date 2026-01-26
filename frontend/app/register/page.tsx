@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/config";
 import {
   Card,
   CardContent,
@@ -50,7 +51,7 @@ export default function Page() {
       setError(null);
       
       // Faz a requisição POST para a API
-      const response = await fetch("http://localhost:8000/users/", {
+      const response = await fetch(`${API_URL}/users/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

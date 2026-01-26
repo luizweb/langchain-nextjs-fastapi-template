@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams, notFound } from "next/navigation";
 import Link from "next/link";
+import { API_URL } from "@/lib/config";
 import {
   Card,
   CardContent,
@@ -66,7 +67,7 @@ function ResetPasswordForm() {
       setError(null);
       
       // TODO: Implementar chamada à API para redefinir senha
-      // await fetch("http://localhost:8000/auth/password-reset/confirm", {
+      // await fetch(`${API_URL}/auth/password-reset/confirm`, {
       //   method: "POST",
       //   headers: { "Content-Type": "application/json" },
       //   body: JSON.stringify({ token, password }),

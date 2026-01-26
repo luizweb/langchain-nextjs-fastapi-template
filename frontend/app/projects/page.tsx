@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/config";
 import {
   Card,
   CardHeader,
@@ -163,7 +164,7 @@ export default function ProjectsPage() {
       const token = localStorage.getItem("access_token");
       if (!token) return;
 
-      const response = await fetch(`http://localhost:8000/chat/files/${projectId}`, {
+      const response = await fetch(`${API_URL}/chat/files/${projectId}`, {
         headers: {
           "Authorization": `Bearer ${token}`,
         },
@@ -221,7 +222,7 @@ export default function ProjectsPage() {
 
         const token = localStorage.getItem("access_token");
 
-        const response = await fetch("http://localhost:8000/projects", {
+        const response = await fetch(`${API_URL}/projects`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -284,7 +285,7 @@ export default function ProjectsPage() {
       
       const token = localStorage.getItem("access_token");
       
-      const response = await fetch(`http://localhost:8000/projects/${editingProject.id}`, {
+      const response = await fetch(`${API_URL}/projects/${editingProject.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -337,7 +338,7 @@ export default function ProjectsPage() {
       
       const token = localStorage.getItem("access_token");
       
-      const response = await fetch(`http://localhost:8000/projects/${deletingProject.id}`, {
+      const response = await fetch(`${API_URL}/projects/${deletingProject.id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -382,7 +383,7 @@ export default function ProjectsPage() {
       
       const token = localStorage.getItem("access_token");
       
-      const response = await fetch("http://localhost:8000/projects", {
+      const response = await fetch(`${API_URL}/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

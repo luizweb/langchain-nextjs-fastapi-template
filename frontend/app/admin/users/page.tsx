@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "@/lib/config";
 import {
   Table,
   TableBody,
@@ -155,7 +156,7 @@ export default function AdminUsersPage() {
         }
 
         // PASSO 2: Busca dados do usuário para verificar se é admin
-        const response = await fetch("http://localhost:8000/users/me", {
+        const response = await fetch(`${API_URL}/users/me`, {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -210,7 +211,7 @@ export default function AdminUsersPage() {
 
         // PASSO 3.2: Faz a requisição GET para a API com parâmetros de paginação
         const response = await fetch(
-          `http://localhost:8000/users/?offset=${offset}&limit=${itemsPerPage}`
+          `${API_URL}/users/?offset=${offset}&limit=${itemsPerPage}`
         );
 
         // PASSO 3.3: Verifica se a resposta foi bem sucedida
@@ -265,7 +266,7 @@ export default function AdminUsersPage() {
       
       const token = localStorage.getItem("access_token");
       
-      const response = await fetch("http://localhost:8000/users/", {
+      const response = await fetch(`${API_URL}/users/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -328,7 +329,7 @@ export default function AdminUsersPage() {
       const token = localStorage.getItem("access_token");
       
       // Faz a requisição DELETE para a API
-      const response = await fetch(`http://localhost:8000/users/${deletingUser.id}`, {
+      const response = await fetch(`${API_URL}/users/${deletingUser.id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,

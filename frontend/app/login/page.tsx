@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { API_URL } from "@/lib/config";
 import {
   Card,
   CardContent,
@@ -56,7 +57,7 @@ export default function Page() {
       // ===============================
       // PASSO 5: Fazer a requisição POST para /auth/token
       // ===============================
-      const response = await fetch("http://localhost:8000/auth/token", {
+      const response = await fetch(`${API_URL}/auth/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
